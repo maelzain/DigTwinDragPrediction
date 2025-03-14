@@ -1,44 +1,46 @@
 # Digital Twin for 2D Unsteady Flow: Drag Prediction
 
-## 1. Introduction
-This project develops a digital twin to predict the instantaneous drag force on a 2D flow around a sphere at various Reynolds numbers. We demonstrate:
-- **Baseline Model**: A simple MLP that flattens images.
-- **Advanced Model**: A CNN for spatial compression + LSTM for temporal evolution.
+## Overview
+This project develops a digital twin for predicting instantaneous drag on a sphere in 2D unsteady flow. It includes:
+- **Baseline Model**: A simple MLP on flattened images.
+- **Advanced Model**: A CNN for spatial compression combined with an LSTM for temporal evolution.
+- **Deployment**: Docker containerization, Flask API, and a Streamlit interactive UI.
 
-## 2. Repository Structure
-project/ ├─ code/ │ ├─ utils/ │ ├─ models/ ├─ data/ ├─ main.py ├─ evaluate.py ├─ streamlit_app.py ├─ api.py ├─ Dockerfile ├─ requirements.txt └─ README.md
+## Repository Structure
+project/ ├─ code/ │ ├─ utils/ # Data loading and preprocessing utilities │ ├─ models/ # Baseline, CNN, and LSTM models ├─ data/ # Raw data organized by Reynolds number ├─ main.py # Model training ├─ evaluate.py # Model evaluation ├─ streamlit_app.py # Interactive UI for predictions ├─ api.py # Flask API for serving predictions ├─ Dockerfile # Containerization ├─ requirements.txt # Dependencies └─ README.md # Project documentation and business pitch
 
-## 3. Installation & Usage
-1. **Install Dependencies**:
-```bash
-pip install -r requirements.txt
-python main.py
-python evaluate.py
+
+## How to Run
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   python main.py
+    python evaluate.py
+
 streamlit run streamlit_app.py
+python api.py
 docker build -t drag-prediction .
 docker run -p 8501:8501 drag-prediction
-4. Technical Highlights
-CNN extracts latent features from 2D snapshots.
-LSTM evolves latent states for time-series drag prediction.
-Configurable normalization (MinMax, Standard, Log) for extremely low drag values (10^-8 range).
-5. Business Vision
-This digital twin can replace or supplement costly CFD simulations or wind-tunnel tests, accelerating R&D in aerospace, automotive, or maritime industries.
+Business Vision
+This digital twin reduces costly physical experiments by providing rapid, accurate drag predictions, enabling faster R&D cycles for industries such as aerospace, automotive, and maritime.
 
-6. Future Work
-Add multi-task learning for lift + drag.
-Incorporate domain adaptation across multiple Reynolds numbers.
-Deploy on AWS/GCP with GPU acceleration.
+Future Work
+Extend to multi-task prediction (e.g., lift and drag).
+Integrate cloud deployment for scalability.
+Enhance UI interactivity and real-time feedback.
+
 
 ---
 
-# Conclusion & Next Steps
+# Conclusion
 
-With this **comprehensive code base** and **project structure**, you now have:
+This comprehensive project code base:
+- Processes raw image and CSV data with robust normalization (including for very low drag values).
+- Implements two models (a baseline and an advanced CNN+LSTM pipeline).
+- Splits data into training and test sets.
+- Provides training, evaluation, interactive UI, and API components.
+- Is containerized using Docker for professional deployment.
 
-1. A **Baseline** (simple MLP) and **Advanced** (CNN+LSTM) model to meet the “two models” requirement.  
-2. A **Docker** setup for containerization and a **Flask API** or **Streamlit UI** for user interaction.  
-3. A **clear MLOps pipeline** (data loading, training, evaluation, deployment).  
-4. Documentation in **README.md** describing your approach and business vision.  
-5. An optional path to **cloud deployment** on AWS/GCP for a truly production-ready solution.
+By following these guidelines and refining hyperparameters as needed, you should have a professional-level project that meets all the technical, business, and MLOps requirements—positioning you for a 100/100 in your machine learning project.
 
-Use this as a **foundation** to add further **presentation flair** (for the “wow factor”), refine hyperparameters, or integrate advanced domain knowledge (like special boundary conditions). This setup should **satisfy** the professor’s requirements for **technical complexity**, **software methodology**, **business aspect**, and **presentation**. Good luck with your digital twin project!
+If you need any further refinements or additional clarifications, feel free to ask!

@@ -7,3 +7,4 @@ matplotlib
 pillow
 pyyaml
 streamlit
+flask

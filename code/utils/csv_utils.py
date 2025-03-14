@@ -22,7 +22,7 @@ def normalize_drag_forces(df, column_name="cd", method="standard"):
         return df
 
     if method == "log":
-        # Add small constant to avoid log(0)
+        # Avoid log(0) by adding a small constant
         df[column_name] = np.log(df[column_name] + 1e-10)
         logging.info(f"Applied log transform to '{column_name}'.")
     else:

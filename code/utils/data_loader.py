@@ -37,11 +37,11 @@ class ReynoldsDataLoader:
             else:
                 drag_tensor = None
 
-            # Ensure that the number of images and drag values match
+            # Ensure matching number of images and drag samples
             if images is not None and images.numel() > 0 and drag_tensor is not None:
                 if images.shape[0] != drag_tensor.shape[0]:
                     logging.warning(
-                        f"Size mismatch in folder {folder}: images={images.shape[0]} vs drag={drag_tensor.shape[0]}. Using min."
+                        f"Size mismatch in folder {folder}: images={images.shape[0]} vs drag={drag_tensor.shape[0]}. Trimming to min count."
                     )
                     min_count = min(images.shape[0], drag_tensor.shape[0])
                     images = images[:min_count]
@@ -61,7 +61,7 @@ class ReynoldsDataLoader:
         times = []
         for name in filenames:
             try:
-                # e.g., "timestep_10.png" -> "timestep_10" -> "10"
+                # Example: "timestep_10.png" -> "timestep_10" -> "10"
                 base = os.path.splitext(name)[0]
                 parts = base.split("_")
                 time_val = float(parts[1])
