@@ -1,0 +1,29 @@
+data_dir: "C:\\Users\\user\\Desktop\\COURSES\\AUB\\Spring 2024-2025-739988\\introduction to machine learning\\project 01\\GItHub\\project\\data"
+reynolds: [37, 75, 150, 300]
+resize: [64, 64]
+augment: false
+device: "cpu"
+
+drag_normalization: "minmax"  # or "standard" or "log"
+
+# Baseline model
+baseline:
+  learning_rate: 0.001
+  epochs: 50
+  batch_size: 64
+
+# CNN
+cnn:
+  latent_dim: 64
+  learning_rate: 0.0009
+  epochs: 100
+  batch_size: 300
+
+# LSTM
+lstm:
+  input_size: 64
+  hidden_size: 32
+  num_layers: 1
+  output_size: 1
+  epochs: 50
+  learning_rate: 0.001
