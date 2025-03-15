@@ -7,18 +7,21 @@ import io
 import base64
 import torchvision.transforms as transforms
 from code.models.cnn_model import CNNDragPredictor
-from code.models.lstm_model import LSTMDragPredictor
 
 app = Flask(__name__)
 
-# Load config and models
+# Load config and model
 with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 device = config.get("device", "cpu")
 
 cnn_model = CNNDragPredictor(latent_dim=config["cnn"].get("latent_dim", 64)).to(device)
-cnn_model.load_state_dict(torch.load(os.path.join("models","cnn_drag_predictor.pth"), map_location=device))
+cnn_model.load_state_dict(torch.load(os.path.join("models", "cnn_drag_predictor.pth"), map_location=device))
 cnn_model.eval()
+
+@app.route("/")
+def index():
+    return "API is running. Use /predict_drag to get predictions."
 
 @app.route("/predict_drag", methods=["POST"])
 def predict_drag():
@@ -32,10 +35,6 @@ def predict_drag():
     with torch.no_grad():
         _, drag_pred = cnn_model(img_tensor)
     return jsonify({"predicted_drag": drag_pred.item()})
-@app.route("/")
-def index():
-    return "API is running. Use /predict_drag for predictions."
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

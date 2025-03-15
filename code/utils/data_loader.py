@@ -37,7 +37,7 @@ class ReynoldsDataLoader:
             else:
                 drag_tensor = None
 
-            # Ensure matching number of images and drag samples
+            # Ensure that the number of images and drag samples match
             if images is not None and images.numel() > 0 and drag_tensor is not None:
                 if images.shape[0] != drag_tensor.shape[0]:
                     logging.warning(
@@ -61,7 +61,6 @@ class ReynoldsDataLoader:
         times = []
         for name in filenames:
             try:
-                # Example: "timestep_10.png" -> "timestep_10" -> "10"
                 base = os.path.splitext(name)[0]
                 parts = base.split("_")
                 time_val = float(parts[1])

@@ -4,22 +4,22 @@ resize: [64, 64]
 augment: false
 device: "cpu"
 
-drag_normalization: "minmax"  # or "standard" or "log"
+drag_normalization: "minmax"      # Options: "minmax", "standard", or "log"
 
-# Baseline model
+# Baseline Model Configuration
 baseline:
   learning_rate: 0.001
   epochs: 50
   batch_size: 64
 
-# CNN
+# CNN Configuration
 cnn:
   latent_dim: 64
   learning_rate: 0.0009
   epochs: 100
   batch_size: 300
 
-# LSTM
+# LSTM Configuration (with Physics-Informed Loss)
 lstm:
   input_size: 64
   hidden_size: 32
@@ -27,3 +27,4 @@ lstm:
   output_size: 1
   epochs: 50
   learning_rate: 0.001
+  physics_loss_weight: 0.01

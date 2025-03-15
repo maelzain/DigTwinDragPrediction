@@ -77,9 +77,10 @@ def main():
     drags_combined = torch.cat(all_drags, dim=0)
 
     full_dataset = TensorDataset(images_combined, drags_combined)
-    train_size = int(0.8 * len(full_dataset))
-    test_size = len(full_dataset) - train_size
-    _, test_dataset = random_split(full_dataset, [train_size, test_size])
+    train_size = int(0.7 * len(full_dataset))
+    val_size = int(0.1 * len(full_dataset))
+    test_size = len(full_dataset) - train_size - val_size
+    _, _, test_dataset = random_split(full_dataset, [train_size, val_size, test_size])
 
     # Load Baseline model
     sample_x, _ = test_dataset[0]

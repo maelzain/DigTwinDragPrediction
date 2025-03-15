@@ -27,28 +27,24 @@ def main():
 
     uploaded_file = st.file_uploader("Choose an image...", type=["png", "jpg", "jpeg"])
     if uploaded_file is not None:
-        # Load and process image as grayscale
         image = Image.open(uploaded_file).convert("L").resize((64, 64))
+        st.image(image, caption="Uploaded Snapshot", use_container_width=True)
         
-        # Convert image to numpy array for contour plot
+        # Generate contour plot of the image
         image_array = np.array(image)
-        
-        # Create contour plot
         fig, ax = plt.subplots(figsize=(6, 6))
         contour = ax.contourf(image_array, cmap="viridis")
         ax.set_title("Contour Plot of Snapshot")
         plt.colorbar(contour, ax=ax)
-        
         st.pyplot(fig)
         
-        # For drag prediction, convert image to tensor
+        # Drag prediction
         transform = transforms.Compose([transforms.ToTensor()])
         img_tensor = transform(image).unsqueeze(0).to(device)
-        
         with torch.no_grad():
             _, drag_pred = cnn_model(img_tensor)
         st.write(f"**Predicted Drag (CNN):** {drag_pred.item():.8f}")
-        st.write("Note: The contour plot represents the intensity values of the snapshot.")
+        st.write("Note: For full time-series (CNN+LSTM) predictions, a sequence of snapshots is required.")
 
 if __name__ == "__main__":
     main()
