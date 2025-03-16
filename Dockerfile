@@ -1,6 +1,7 @@
 # Use a slim Python 3.10 image on Bullseye
 FROM python:3.10-slim-bullseye
 
+# Prevent Python from writing .pyc files and buffering outputs
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
@@ -22,16 +23,18 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements and install PyTorch (CPU-only) using the official binaries
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir \
-    torch==2.1.0 \
-    torchvision==0.16.0 \
-    --index-url https://download.pytorch.org/whl/cpu
+    pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Install remaining Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
+# Copy the rest of the project code into the container
 COPY . .
 
+# Expose the necessary ports for Streamlit (8501) and Flask API (5000)
 EXPOSE 8501 5000
-# By default, this command starts the Streamlit app.
-CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+
+# Copy and grant execution permission for the startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Start both the API and the Streamlit app concurrently
+CMD ["./start.sh"]

@@ -1,0 +1,15 @@
+services:
+  streamlit:
+    image: drag-prediction
+    command: streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+  api:
+    image: drag-prediction
+    command: python api.py
+    ports:
+      - "5000:5000"
+    volumes:
+      - .:/app
