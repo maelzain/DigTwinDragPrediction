@@ -5,7 +5,7 @@ reynolds: [37, 75, 150, 300]
 resize: [64, 64]
 augment: true
 device: "cpu"
-drag_normalization: "standard"  # Options: "minmax", "standard", or "log"
+drag_normalization: "minmax"  # Using minmax to ensure all drag values are scaled between 0 and 1
 
 # Baseline Model Configuration
 baseline:
@@ -22,13 +22,14 @@ cnn:
 
 # LSTM Configuration (with Physics-Informed Loss)
 lstm:
-  input_size: 128        # Should match CNN latent_dim
+  input_size: 128        # Must match CNN latent_dim
   hidden_size: 64
   num_layers: 2
   output_size: 1
   epochs: 100
   learning_rate: 0.0005
   physics_loss_weight: 0.005
+  batch_size: 64
 
 # Data Splitting Configuration
 split:

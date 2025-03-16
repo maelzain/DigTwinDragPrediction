@@ -89,8 +89,7 @@ def train_cnn_model(train_dataset, config, device="cpu"):
 
 def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
     """
-    Trains the LSTM model to evolve CNN latent vectors over time,
-    with an added physics-informed loss to enforce smooth predictions.
+    Trains the LSTM model to evolve CNN latent vectors over time with physics-informed loss.
     """
     lstm_epochs = config["lstm"].get("epochs", 100)
     lstm_lr = config["lstm"].get("learning_rate", 0.0005)
@@ -100,21 +99,24 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
     num_layers = config["lstm"].get("num_layers", 2)
     output_size = config["lstm"].get("output_size", 1)
     
-    # Prepare full sequence data from train_dataset
-    images_all, drags_all = [], []
-    for x, y in train_dataset:
-        images_all.append(x.unsqueeze(0))
-        drags_all.append(y)
-    images_all = torch.cat(images_all, dim=0).to(device)
-    drags_all = torch.cat(drags_all, dim=0).to(device).squeeze(-1)
-
+    # Extract latent features using the pre-trained CNN
     cnn_model.eval()
+    latents = []
     with torch.no_grad():
-        latents = [cnn_model(images_all[i:i+1])[0] for i in range(images_all.size(0))]
-    latents_all = torch.cat(latents, dim=0)
-    # Reshape for LSTM: (seq_len, batch, input_size) with batch=1
-    latents_all = latents_all.unsqueeze(1)
-
+        for i in range(train_dataset.__len__()):
+            x, _ = train_dataset[i]
+            latent, _ = cnn_model(x.unsqueeze(0).to(device))
+            latents.append(latent.cpu())
+    latents = torch.cat(latents, dim=0)  # Shape: (N, latent_dim)
+    
+    # Prepare dataset and dataloader for LSTM training
+    dataset = TensorDataset(latents, torch.cat([y for _, y in train_dataset], dim=0))
+    batch_size = config["lstm"].get("batch_size", 64)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    
+    # Reshape latent features for LSTM: (seq_len, batch, input_size)
+    latents_all = latents.unsqueeze(1)
+    
     lstm_model = LSTMDragPredictor(
         input_size=input_size,
         hidden_size=hidden_size,
@@ -124,14 +126,14 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
     criterion = nn.MSELoss()
     optimizer = optim.Adam(lstm_model.parameters(), lr=lstm_lr)
     
-    logging.info(f"Training LSTM with physics-informed loss for {lstm_epochs} epochs on {device}")
+    logging.info(f"Training LSTM for {lstm_epochs} epochs on {device}")
     lstm_model.train()
     for epoch in range(1, lstm_epochs + 1):
         optimizer.zero_grad()
-        pred_seq, _ = lstm_model(latents_all)  # shape: (seq_len, 1, 1)
-        pred_seq = pred_seq.squeeze()
-        mse_loss = criterion(pred_seq, drags_all)
-        # Physics-informed loss: enforce smoothness using finite differences
+        pred_seq, _ = lstm_model(latents_all)  # Expected shape: (seq_len, 1, 1)
+        pred_seq = pred_seq.squeeze()           # Shape: (seq_len,)
+        mse_loss = criterion(pred_seq, torch.cat([y for _, y in train_dataset], dim=0).squeeze())
+        # Physics-informed loss (smoothness via finite differences)
         if pred_seq.size(0) > 1:
             diff_pred = pred_seq[1:] - pred_seq[:-1]
             physics_loss = torch.mean(diff_pred ** 2)
@@ -141,7 +143,7 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
         total_loss.backward()
         optimizer.step()
         if epoch % 5 == 0 or epoch == lstm_epochs:
-            logging.info(f"[LSTM] Epoch {epoch}/{lstm_epochs}, MSE Loss: {mse_loss.item():.6f}, Physics Loss: {physics_loss if isinstance(physics_loss, float) else physics_loss.item():.6f}, Total Loss: {total_loss.item():.6f}")
+            logging.info(f"[LSTM] Epoch {epoch}/{lstm_epochs} - MSE: {mse_loss.item():.6f}, Physics: {physics_loss if isinstance(physics_loss, float) else physics_loss.item():.6f}, Total: {total_loss.item():.6f}")
     return lstm_model
 
 def main():
@@ -149,7 +151,8 @@ def main():
     config = load_config()
     device = config.get("device", "cpu")
     
-    # Load dataset from all Reynolds folders
+    # Load dataset from Reynolds folders
+    from code.utils.data_loader import ReynoldsDataLoader
     loader = ReynoldsDataLoader(config)
     data_dict = loader.load_dataset()
     all_images, all_drags = [], []
@@ -180,7 +183,7 @@ def main():
     cnn_model = train_cnn_model(train_dataset, config, device=device)
     torch.save(cnn_model.state_dict(), os.path.join("models", "cnn_drag_predictor.pth"))
     
-    # Train LSTM Model using CNN latent features (with physics-informed loss)
+    # Train LSTM Model using CNN latent features with physics-informed loss
     lstm_model = train_lstm_model(cnn_model, train_dataset, config, device=device)
     torch.save(lstm_model.state_dict(), os.path.join("models", "lstm_drag.pth"))
     

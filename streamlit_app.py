@@ -12,7 +12,6 @@ from PIL import Image
 import torchvision.transforms as transforms
 from code.models.cnn_model import CNNDragPredictor
 from code.models.baseline_model import BaselineMLP
-import requests
 
 def load_config():
     with open("config.yaml", "r") as f:
@@ -21,6 +20,7 @@ def load_config():
 def is_valid_contour_image(filename, image):
     """
     Validate that the image is likely a velocity contour plot.
+    Checks that the filename contains expected keywords and that image contrast is sufficient.
     """
     expected_keywords = ["timestep", "re", "contour"]
     if not any(keyword in filename.lower() for keyword in expected_keywords):
@@ -135,13 +135,13 @@ def main():
             img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
             st.info("API integration not implemented in this demo. Uncomment the API call code for live predictions.")
             # Uncomment below to call the live API:
-             
-    response = requests.post("http://127.0.0.1:5000/predict_drag", json={"image": img_str, "filename": uploaded_file.name})
-    if response.ok:
-                 result = response.json()
-                 st.write(f"**API Predicted Drag:** {result['predicted_drag']:.8f}")
-    else:
-                 st.error("API request failed.")
+            # import requests
+            # response = requests.post("http://127.0.0.1:5000/predict_drag", json={"image": img_str, "filename": uploaded_file.name})
+            # if response.ok:
+            #     result = response.json()
+            #     st.write(f"**API Predicted Drag:** {result['predicted_drag']:.8f}")
+            # else:
+            #     st.error("API request failed.")
     
 if __name__ == "__main__":
     main()

@@ -7,7 +7,7 @@ class CNNDragPredictor(nn.Module):
     The network compresses a 64x64 grayscale image into a latent vector via convolutional layers,
     then predicts drag using a fully-connected head.
     """
-    def __init__(self, latent_dim=64):
+    def __init__(self, latent_dim=128):
         super(CNNDragPredictor, self).__init__()
         # Encoder: three convolutional blocks
         self.conv1 = nn.Sequential(

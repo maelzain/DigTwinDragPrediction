@@ -12,7 +12,8 @@ from code.models.lstm_model import LSTMDragPredictor
 
 def compute_regression_metrics(y_true, y_pred):
     """
-    Compute regression metrics: MSE, RMSE, and R².
+    Compute regression metrics: Mean Squared Error (MSE), Root Mean Squared Error (RMSE),
+    and Coefficient of Determination (R²).
     """
     mse = np.mean((y_true - y_pred) ** 2)
     rmse = np.sqrt(mse)
@@ -21,6 +22,9 @@ def compute_regression_metrics(y_true, y_pred):
     return mse, rmse, r2
 
 def evaluate_baseline_model(baseline_model, test_dataset, device="cpu"):
+    """
+    Evaluate the Baseline MLP model on the test dataset.
+    """
     baseline_model.eval()
     y_true_list, y_pred_list = [], []
     with torch.no_grad():
@@ -34,6 +38,13 @@ def evaluate_baseline_model(baseline_model, test_dataset, device="cpu"):
     return compute_regression_metrics(y_true, y_pred)
 
 def evaluate_cnn_lstm_model(cnn_model, lstm_model, test_dataset, device="cpu"):
+    """
+    Evaluate the CNN+LSTM pipeline on the test dataset.
+    Returns:
+        - metrics: Tuple (MSE, RMSE, R²)
+        - y_true: True drag values (flattened)
+        - y_pred: Predicted drag values (flattened)
+    """
     cnn_model.eval()
     lstm_model.eval()
     images_list, drags_list = [], []
@@ -46,8 +57,7 @@ def evaluate_cnn_lstm_model(cnn_model, lstm_model, test_dataset, device="cpu"):
     with torch.no_grad():
         latents = [cnn_model(images_all[i:i+1])[0] for i in range(images_all.size(0))]
     latents_all = torch.cat(latents, dim=0)
-    # Reshape for LSTM: (seq_len, batch, input_size)
-    latents_all = latents_all.unsqueeze(1)
+    latents_all = latents_all.unsqueeze(1)  # Reshape for LSTM: (seq_len, batch, input_size)
     with torch.no_grad():
         pred_seq, _ = lstm_model(latents_all)
         pred_seq = pred_seq.squeeze()
@@ -57,6 +67,51 @@ def evaluate_cnn_lstm_model(cnn_model, lstm_model, test_dataset, device="cpu"):
     metrics = compute_regression_metrics(y_true, y_pred)
     return metrics, y_true, y_pred
 
+def robust_evaluation(dataset, baseline_model, cnn_model, lstm_model, device="cpu", folds=5):
+    """
+    Perform robust evaluation over multiple random splits.
+    Returns average and standard deviation metrics for both models.
+    """
+    baseline_metrics = []
+    cnn_lstm_metrics = []
+    total_samples = len(dataset)
+    
+    for fold in range(folds):
+        test_size = int(0.1 * total_samples)  # 10% test split per fold
+        train_size = total_samples - test_size
+        _, test_dataset = random_split(dataset, [train_size, test_size])
+        
+        mse_b, rmse_b, r2_b = evaluate_baseline_model(baseline_model, test_dataset, device=device)
+        baseline_metrics.append((mse_b, rmse_b, r2_b))
+        
+        metrics_cnn, _, _ = evaluate_cnn_lstm_model(cnn_model, lstm_model, test_dataset, device=device)
+        cnn_lstm_metrics.append(metrics_cnn)
+        
+        logging.info(f"Fold {fold+1}: Baseline MSE={mse_b:.6f}, CNN+LSTM MSE={metrics_cnn[0]:.6f}")
+    
+    baseline_metrics = np.array(baseline_metrics)
+    cnn_lstm_metrics = np.array(cnn_lstm_metrics)
+    
+    results = {
+        "baseline": {
+            "MSE_mean": baseline_metrics[:, 0].mean(),
+            "MSE_std": baseline_metrics[:, 0].std(),
+            "RMSE_mean": baseline_metrics[:, 1].mean(),
+            "RMSE_std": baseline_metrics[:, 1].std(),
+            "R2_mean": baseline_metrics[:, 2].mean(),
+            "R2_std": baseline_metrics[:, 2].std()
+        },
+        "cnn_lstm": {
+            "MSE_mean": cnn_lstm_metrics[:, 0].mean(),
+            "MSE_std": cnn_lstm_metrics[:, 0].std(),
+            "RMSE_mean": cnn_lstm_metrics[:, 1].mean(),
+            "RMSE_std": cnn_lstm_metrics[:, 1].std(),
+            "R2_mean": cnn_lstm_metrics[:, 2].mean(),
+            "R2_std": cnn_lstm_metrics[:, 2].std()
+        }
+    }
+    return results
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
@@ -64,7 +119,8 @@ def main():
         config = yaml.safe_load(f)
     device = config.get("device", "cpu")
     
-    # Load dataset
+    # Load dataset using ReynoldsDataLoader
+    from code.utils.data_loader import ReynoldsDataLoader
     loader = ReynoldsDataLoader(config)
     data_dict = loader.load_dataset()
     all_images, all_drags = [], []
@@ -76,7 +132,7 @@ def main():
     drags_combined = torch.cat(all_drags, dim=0)
     full_dataset = TensorDataset(images_combined, drags_combined)
     
-    # Create final test set (10% of total data)
+    # Create a final test set using a 10% split
     total_samples = len(full_dataset)
     test_size = int(config["split"].get("test_ratio", 0.1) * total_samples)
     train_size = total_samples - test_size
@@ -110,11 +166,16 @@ def main():
     logging.info(f"Baseline MLP - MSE: {mse_b:.6f}, RMSE: {rmse_b:.6f}, R²: {r2_b:.6f}")
     logging.info(f"CNN+LSTM   - MSE: {mse_c:.6f}, RMSE: {rmse_c:.6f}, R²: {r2_c:.6f}")
     
-    # Plot predictions vs true values
+    results = robust_evaluation(full_dataset, baseline_model, cnn_model, lstm_model, device=device, folds=config["robust_evaluation"].get("folds", 5))
+    logging.info("Robust Evaluation Results:")
+    logging.info(f"Baseline MSE: {results['baseline']['MSE_mean']:.6f} ± {results['baseline']['MSE_std']:.6f}")
+    logging.info(f"CNN+LSTM   MSE: {results['cnn_lstm']['MSE_mean']:.6f} ± {results['cnn_lstm']['MSE_std']:.6f}")
+    
+    # Plot predictions vs. true values for final test set
     plt.figure(figsize=(10, 6))
     plt.plot(y_true, label="True Drag", marker="o", linestyle="-")
     plt.plot(y_pred, label="Predicted Drag", marker="x", linestyle="--")
-    plt.title("CNN+LSTM Drag Prediction on Test Set")
+    plt.title("CNN+LSTM Drag Prediction on Final Test Set")
     plt.xlabel("Test Sample Index")
     plt.ylabel("Drag (normalized)")
     plt.legend()

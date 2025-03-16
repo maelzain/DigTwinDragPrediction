@@ -15,7 +15,7 @@ class ReynoldsDataLoader:
         self.reynolds = config["reynolds"]
         self.resize = config.get("resize", [64, 64])
         self.augment = config.get("augment", False)
-        self.drag_normalization = config.get("drag_normalization", "standard")
+        self.drag_normalization = config.get("drag_normalization", "minmax")
 
     def load_dataset(self):
         """

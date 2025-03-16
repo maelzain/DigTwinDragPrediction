@@ -8,6 +8,7 @@ def load_and_preprocess_images(folder_path, resize=[64, 64], augment=False):
     """
     Loads all valid image files in a folder, converts them to grayscale,
     resizes them, applies optional augmentation, and converts to PyTorch tensors.
+    
     Returns:
       - images_tensor: Stacked tensor of images.
       - orig_shapes: List of original image sizes.

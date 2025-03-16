@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies (for PyTorch, OpenCV, Pillow, etc.)
+# Install system dependencies (for PyTorch, image processing, etc.)
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (CPU-only version) using official binaries
+# Copy requirements and install PyTorch (CPU-only) using the official binaries
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir \
@@ -33,6 +33,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 8501 5000
-# You can choose which service to run.
 # By default, this command starts the Streamlit app.
 CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
