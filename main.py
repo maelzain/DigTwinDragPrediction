@@ -1,52 +1,50 @@
-import logging
 import os
+import logging
 import yaml
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, random_split
-
+from torch.utils.data import DataLoader, random_split, TensorDataset
 from code.utils.data_loader import ReynoldsDataLoader
 from code.models.baseline_model import BaselineMLP
 from code.models.cnn_model import CNNDragPredictor
 from code.models.lstm_model import LSTMDragPredictor
 
-def load_config(config_path):
+def load_config(config_path="config.yaml"):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    logging.info("Config loaded with keys: %s", list(config.keys()))
+    logging.info(f"Config loaded with keys: {list(config.keys())}")
     return config
 
-def split_dataset_3(images, drags, train_ratio=0.7, val_ratio=0.1, test_ratio=0.2):
+def split_dataset(images, drags, train_ratio, test_ratio, eval_ratio):
     """
-    Splits the dataset into training, validation, and test sets.
-    The ratios must sum to 1.
+    Split dataset into training, testing, and evaluation sets.
     """
-    assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6, "Ratios must sum to 1."
-    dataset = TensorDataset(images, drags)
-    total_samples = len(dataset)
+    total_samples = images.shape[0]
     train_size = int(train_ratio * total_samples)
-    val_size = int(val_ratio * total_samples)
-    test_size = total_samples - train_size - val_size
-    train_dataset, val_dataset, test_dataset = random_split(dataset, [train_size, val_size, test_size])
-    logging.info(f"Dataset split into {train_size} training, {val_size} validation, and {test_size} test samples.")
-    return train_dataset, val_dataset, test_dataset
+    test_size = int(test_ratio * total_samples)
+    eval_size = total_samples - train_size - test_size
+    train_dataset, test_dataset, eval_dataset = random_split(
+        TensorDataset(images, drags), [train_size, test_size, eval_size]
+    )
+    logging.info(f"Dataset split: {train_size} training, {test_size} testing, {eval_size} evaluation samples.")
+    return train_dataset, test_dataset, eval_dataset
 
 def train_baseline_model(train_dataset, config, device="cpu"):
     batch_size = config["baseline"].get("batch_size", 64)
-    lr = config["baseline"].get("learning_rate", 1e-3)
-    epochs = config["baseline"].get("epochs", 50)
+    lr = config["baseline"].get("learning_rate", 0.0005)
+    epochs = config["baseline"].get("epochs", 100)
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     sample_image, _ = train_dataset[0]
     input_dim = sample_image.numel()
-    model = BaselineMLP(input_dim=input_dim).to(device)
+    model = BaselineMLP(input_dim=input_dim, hidden_dim=128).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    logging.info(f"Training Baseline MLP for {epochs} epochs on {device}...")
+    logging.info(f"Training Baseline MLP for {epochs} epochs on {device}")
     model.train()
-    for epoch in range(1, epochs+1):
+    for epoch in range(1, epochs + 1):
         running_loss = 0.0
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
@@ -62,19 +60,19 @@ def train_baseline_model(train_dataset, config, device="cpu"):
     return model
 
 def train_cnn_model(train_dataset, config, device="cpu"):
-    batch_size = config["cnn"].get("batch_size", 300)
-    lr = config["cnn"].get("learning_rate", 1e-3)
-    epochs = config["cnn"].get("epochs", 100)
-    latent_dim = config["cnn"].get("latent_dim", 64)
+    batch_size = config["cnn"].get("batch_size", 256)
+    lr = config["cnn"].get("learning_rate", 0.0005)
+    epochs = config["cnn"].get("epochs", 150)
+    latent_dim = config["cnn"].get("latent_dim", 128)
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     model = CNNDragPredictor(latent_dim=latent_dim).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    logging.info(f"Training CNN for {epochs} epochs on {device}...")
+    logging.info(f"Training CNN for {epochs} epochs on {device}")
     model.train()
-    for epoch in range(1, epochs+1):
+    for epoch in range(1, epochs + 1):
         running_loss = 0.0
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
@@ -91,31 +89,29 @@ def train_cnn_model(train_dataset, config, device="cpu"):
 
 def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
     """
-    Uses the CNN to extract latent vectors from the entire training dataset,
-    then trains an LSTM to evolve these latent representations over time.
-    Adds a physics-informed loss term to enforce smoothness (as a proxy for physical constraints).
+    Trains the LSTM model to evolve CNN latent vectors over time,
+    with an added physics-informed loss to enforce smooth predictions.
     """
-    lstm_epochs = config["lstm"].get("epochs", 50)
-    lstm_lr = config["lstm"].get("learning_rate", 1e-3)
-    input_size = config["lstm"].get("input_size", 64)
-    hidden_size = config["lstm"].get("hidden_size", 32)
-    num_layers = config["lstm"].get("num_layers", 1)
+    lstm_epochs = config["lstm"].get("epochs", 100)
+    lstm_lr = config["lstm"].get("learning_rate", 0.0005)
+    physics_loss_weight = config["lstm"].get("physics_loss_weight", 0.005)
+    input_size = config["lstm"].get("input_size", 128)
+    hidden_size = config["lstm"].get("hidden_size", 64)
+    num_layers = config["lstm"].get("num_layers", 2)
     output_size = config["lstm"].get("output_size", 1)
-    physics_loss_weight = config["lstm"].get("physics_loss_weight", 0.01)
-
+    
     # Prepare full sequence data from train_dataset
-    images_all, drags_all = zip(*train_dataset)
-    images_all = torch.stack(images_all).to(device)
-    drags_all = torch.stack(drags_all).to(device).squeeze(-1)
+    images_all, drags_all = [], []
+    for x, y in train_dataset:
+        images_all.append(x.unsqueeze(0))
+        drags_all.append(y)
+    images_all = torch.cat(images_all, dim=0).to(device)
+    drags_all = torch.cat(drags_all, dim=0).to(device).squeeze(-1)
 
     cnn_model.eval()
     with torch.no_grad():
-        latents_list = []
-        for i in range(images_all.size(0)):
-            latent, _ = cnn_model(images_all[i:i+1])
-            latents_list.append(latent)
-        latents_all = torch.cat(latents_list, dim=0)  # shape: (N, latent_dim)
-    
+        latents = [cnn_model(images_all[i:i+1])[0] for i in range(images_all.size(0))]
+    latents_all = torch.cat(latents, dim=0)
     # Reshape for LSTM: (seq_len, batch, input_size) with batch=1
     latents_all = latents_all.unsqueeze(1)
 
@@ -127,69 +123,68 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
     ).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(lstm_model.parameters(), lr=lstm_lr)
-
-    logging.info(f"Training LSTM with physics-informed loss for {lstm_epochs} epochs on {device}...")
+    
+    logging.info(f"Training LSTM with physics-informed loss for {lstm_epochs} epochs on {device}")
     lstm_model.train()
-    for epoch in range(1, lstm_epochs+1):
+    for epoch in range(1, lstm_epochs + 1):
         optimizer.zero_grad()
-        pred_seq, _ = lstm_model(latents_all)  # shape: (N, 1, 1)
-        pred_seq = pred_seq.squeeze()           # (N,)
+        pred_seq, _ = lstm_model(latents_all)  # shape: (seq_len, 1, 1)
+        pred_seq = pred_seq.squeeze()
         mse_loss = criterion(pred_seq, drags_all)
-        # Physics-informed loss: enforce smooth predictions (finite differences close to zero)
-        diff_pred = pred_seq[1:] - pred_seq[:-1]
-        physics_loss = torch.mean(diff_pred ** 2)
+        # Physics-informed loss: enforce smoothness using finite differences
+        if pred_seq.size(0) > 1:
+            diff_pred = pred_seq[1:] - pred_seq[:-1]
+            physics_loss = torch.mean(diff_pred ** 2)
+        else:
+            physics_loss = 0.0
         total_loss = mse_loss + physics_loss_weight * physics_loss
         total_loss.backward()
         optimizer.step()
-
         if epoch % 5 == 0 or epoch == lstm_epochs:
-            logging.info(f"[LSTM] Epoch {epoch}/{lstm_epochs}, MSE Loss: {mse_loss.item():.6f}, Physics Loss: {physics_loss.item():.6f}, Total Loss: {total_loss.item():.6f}")
+            logging.info(f"[LSTM] Epoch {epoch}/{lstm_epochs}, MSE Loss: {mse_loss.item():.6f}, Physics Loss: {physics_loss if isinstance(physics_loss, float) else physics_loss.item():.6f}, Total Loss: {total_loss.item():.6f}")
     return lstm_model
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
-    config = load_config(config_path)
+    config = load_config()
     device = config.get("device", "cpu")
-
+    
     # Load dataset from all Reynolds folders
     loader = ReynoldsDataLoader(config)
-    dataset = loader.load_dataset()
-
-    all_images = []
-    all_drags = []
-    for folder, data in dataset.items():
-        images = data["images"]
-        drag = data["drag"]
-        if images is not None and images.numel() > 0 and drag is not None:
-            all_images.append(images)
-            all_drags.append(drag)
+    data_dict = loader.load_dataset()
+    all_images, all_drags = [], []
+    for folder, data in data_dict.items():
+        if data["images"] is not None and data["images"].numel() > 0 and data["drag"] is not None:
+            all_images.append(data["images"])
+            all_drags.append(data["drag"])
     if not all_images:
-        logging.error("No valid images found.")
+        logging.error("No valid images found in dataset.")
         return
-
     images_combined = torch.cat(all_images, dim=0)
     drags_combined = torch.cat(all_drags, dim=0)
     logging.info(f"Combined images shape: {images_combined.shape}")
     logging.info(f"Combined drags shape: {drags_combined.shape}")
-
-    # Split dataset: 70% training, 10% validation, 20% test
-    train_dataset, val_dataset, test_dataset = split_dataset_3(images_combined, drags_combined, 0.7, 0.1, 0.2)
-
+    
+    # Split dataset: 70% training, 10% testing, 10% evaluation
+    train_ratio = config["split"].get("train_ratio", 0.7)
+    test_ratio = config["split"].get("test_ratio", 0.1)
+    eval_ratio = config["split"].get("eval_ratio", 0.1)
+    train_dataset, test_dataset, eval_dataset = split_dataset(images_combined, drags_combined, train_ratio, test_ratio, eval_ratio)
+    
     # Train Baseline Model
     baseline_model = train_baseline_model(train_dataset, config, device=device)
     os.makedirs("models", exist_ok=True)
     torch.save(baseline_model.state_dict(), os.path.join("models", "baseline_mlp.pth"))
-
+    
     # Train CNN Model
     cnn_model = train_cnn_model(train_dataset, config, device=device)
     torch.save(cnn_model.state_dict(), os.path.join("models", "cnn_drag_predictor.pth"))
-
-    # Train LSTM Model using CNN latents (with physics-informed loss)
+    
+    # Train LSTM Model using CNN latent features (with physics-informed loss)
     lstm_model = train_lstm_model(cnn_model, train_dataset, config, device=device)
     torch.save(lstm_model.state_dict(), os.path.join("models", "lstm_drag.pth"))
-
-    logging.info("Training completed. Models saved in the 'models' directory.")
     
+    logging.info("Training completed. Models saved in the 'models' directory.")
+
 if __name__ == "__main__":
     main()

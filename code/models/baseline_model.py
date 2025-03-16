@@ -3,8 +3,8 @@ import torch.nn as nn
 
 class BaselineMLP(nn.Module):
     """
-    A simple baseline model using an MLP.
-    It flattens the image and directly predicts the drag.
+    Baseline MLP model for drag prediction.
+    Flattens the input (assumed 64x64 grayscale) and predicts a drag value.
     """
     def __init__(self, input_dim=64*64, hidden_dim=128):
         super(BaselineMLP, self).__init__()

@@ -5,6 +5,10 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 def load_csv_file(csv_path):
+    """
+    Load a CSV file into a DataFrame.
+    Logs and returns None if file not found or error occurs.
+    """
     if not os.path.exists(csv_path):
         logging.error(f"CSV file not found: {csv_path}")
         return None
@@ -17,12 +21,15 @@ def load_csv_file(csv_path):
         return None
 
 def normalize_drag_forces(df, column_name="cd", method="standard"):
+    """
+    Normalize drag force values in the specified column.
+    Supports 'minmax', 'standard', or 'log' transformation.
+    """
     if column_name not in df.columns:
         logging.error(f"Column '{column_name}' not found in dataframe.")
         return df
 
     if method == "log":
-        # Avoid log(0) by adding a small constant
         df[column_name] = np.log(df[column_name] + 1e-10)
         logging.info(f"Applied log transform to '{column_name}'.")
     else:
@@ -32,6 +39,9 @@ def normalize_drag_forces(df, column_name="cd", method="standard"):
     return df
 
 def preprocess_drag_csv(csv_path, column_name="cd", norm_method="standard"):
+    """
+    Load and preprocess the CSV file containing drag forces.
+    """
     df = load_csv_file(csv_path)
     if df is not None:
         df = normalize_drag_forces(df, column_name, method=norm_method)

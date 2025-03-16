@@ -1,10 +1,15 @@
 import os
 import logging
 import torch
+from torch.utils.data import TensorDataset
 from code.utils.image_utils import load_and_preprocess_images
 from code.utils.csv_utils import preprocess_drag_csv
 
 class ReynoldsDataLoader:
+    """
+    Loads and preprocesses the dataset for multiple Reynolds experiments.
+    Combines images and corresponding drag CSV data.
+    """
     def __init__(self, config):
         self.data_dir = config["data_dir"]
         self.reynolds = config["reynolds"]
@@ -13,6 +18,10 @@ class ReynoldsDataLoader:
         self.drag_normalization = config.get("drag_normalization", "standard")
 
     def load_dataset(self):
+        """
+        Iterates through each Reynolds folder, loads images and drag data,
+        and returns a dictionary with keys corresponding to each folder.
+        """
         dataset = {}
         for re_val in self.reynolds:
             folder = f"re{re_val}"
@@ -37,7 +46,7 @@ class ReynoldsDataLoader:
             else:
                 drag_tensor = None
 
-            # Ensure that the number of images and drag samples match
+            # Ensure the number of images and drag values match
             if images is not None and images.numel() > 0 and drag_tensor is not None:
                 if images.shape[0] != drag_tensor.shape[0]:
                     logging.warning(
@@ -54,10 +63,14 @@ class ReynoldsDataLoader:
                 "filenames": filenames
             }
             if images.numel() > 0 and drag_tensor is not None:
-                logging.info(f"Folder {folder}: images={images.shape}, drag={drag_tensor.shape}")
+                logging.info(f"Folder {folder}: images shape {images.shape}, drag shape {drag_tensor.shape}")
         return dataset
 
     def extract_times(self, filenames):
+        """
+        Extracts time values from filenames that follow the format "timestep_XXXX.png".
+        Returns a list of float time values.
+        """
         times = []
         for name in filenames:
             try:

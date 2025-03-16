@@ -1,30 +1,44 @@
+# Configuration for Digital Twin for 2D Unsteady Flow Drag Prediction
+
 data_dir: "C:\\Users\\user\\Desktop\\COURSES\\AUB\\Spring 2024-2025-739988\\introduction to machine learning\\project 01\\GItHub\\project\\data"
 reynolds: [37, 75, 150, 300]
 resize: [64, 64]
-augment: false
+augment: true
 device: "cpu"
-
-drag_normalization: "minmax"      # Options: "minmax", "standard", or "log"
+drag_normalization: "standard"  # Options: "minmax", "standard", or "log"
 
 # Baseline Model Configuration
 baseline:
-  learning_rate: 0.001
-  epochs: 50
+  learning_rate: 0.0005
+  epochs: 100
   batch_size: 64
 
 # CNN Configuration
 cnn:
-  latent_dim: 64
-  learning_rate: 0.0009
-  epochs: 100
-  batch_size: 300
+  latent_dim: 128
+  learning_rate: 0.0005
+  epochs: 150
+  batch_size: 256
 
 # LSTM Configuration (with Physics-Informed Loss)
 lstm:
-  input_size: 64
-  hidden_size: 32
-  num_layers: 1
+  input_size: 128        # Should match CNN latent_dim
+  hidden_size: 64
+  num_layers: 2
   output_size: 1
-  epochs: 50
-  learning_rate: 0.001
-  physics_loss_weight: 0.01
+  epochs: 100
+  learning_rate: 0.0005
+  physics_loss_weight: 0.005
+
+# Data Splitting Configuration
+split:
+  train_ratio: 0.7
+  test_ratio: 0.1
+  eval_ratio: 0.1
+
+# Robust Evaluation Settings
+robust_evaluation:
+  folds: 5
+
+# Flag for interactive plots in UI
+show_interactive: true
