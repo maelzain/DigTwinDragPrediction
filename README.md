@@ -31,4 +31,4 @@ This updated code base now includes:
 - Data splitting into training (70%), validation (10%), and test (20%) sets.
 - Comprehensive documentation, Docker containerization, an API, and an interactive UI.
 
-Use this as your new project foundation to achieve a robust, professional solution ready for submission and demonstration. If you need further refinements or additional explanations, feel free to ask!
+
