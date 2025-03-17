@@ -116,3 +116,32 @@ For questions or further information, please contact:
 Name: Mahdi ELzain
 Email: mahdielzain@outlook.com
 GitHub: https://github.com/maelzain/DigTwinDragPrediction
+#Step-by-Step Summary
+Clone the Repository:
+git clone https://github.com/maelzain/DigTwinDragPrediction.git
+cd DigTwinDragPrediction
+
+#Build the Docker Image:
+docker build -t drag-prediction .
+
+#Launch the Services with Docker Compose:
+
+docker-compose up
+
+
+#Access the Services:
+
+API: http://localhost:5000
+Streamlit UI: http://localhost:8501
+Test the API:
+
+Convert an image to a base64 string.
+Send a POST request to /predict_drag using curl.
+#Train & Evaluate Models (if needed):
+
+python train.py
+python evaluate.py
+
+#Stop the Services:
+docker-compose down
+
