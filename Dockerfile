@@ -1,4 +1,3 @@
-# Use a slim Python 3.12 image on Bullseye
 FROM python:3.12-slim-bullseye
 
 # Prevent Python from writing .pyc files and buffering outputs
@@ -27,10 +26,10 @@ COPY requirements.txt .
 
 # Upgrade pip and install dependencies
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir \
-    torch @ https://download.pytorch.org/whl/cpu/torch-2.2.1+cpu-cp312-cp312-linux_x86_64.whl \
-    torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.17.1+cpu-cp312-cp312-linux_x86_64.whl && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.2.1 \
+    torchvision==0.17.1 && \
+    pip install -r requirements.txt
 
 # Copy the rest of the project code into the container
 COPY . .

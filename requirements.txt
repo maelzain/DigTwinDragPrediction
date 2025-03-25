@@ -1,13 +1,14 @@
-# Use direct wheel URLs for CPU-only PyTorch packages for Python 3.12
-torch @ https://download.pytorch.org/whl/cpu/torch-2.2.1+cpu-cp312-cp312-linux_x86_64.whl
-torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.17.1+cpu-cp312-cp312-linux_x86_64.whl
-# Other pinned dependencies for reproducibility
+# Use explicit index URL for PyTorch
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.2.1
+torchvision==0.17.1
+# Other dependencies
 pandas==2.2.3
 numpy==1.24.3
-scikit-learn==1.5.0  # Updated to latest compatible version
-matplotlib==3.8.3    # Updated to latest compatible version
+scikit-learn==1.5.0
+matplotlib==3.8.3
 pillow==11.1.0
 pyyaml==6.0.2
-streamlit==1.32.2    # Updated to latest version
+streamlit==1.32.2
 flask==3.1.0
 plotly>=6.0.0
