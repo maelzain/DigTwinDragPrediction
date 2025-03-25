@@ -2,17 +2,25 @@ version: '3.8'
 
 services:
   streamlit:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     command: streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
     ports:
       - "8501:8501"
     environment:
       - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app
 
   api:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     command: python api.py
     ports:
       - "5000:5000"
     environment:
       - PYTHONUNBUFFERED=1
+    volumes:
+      - .:/app

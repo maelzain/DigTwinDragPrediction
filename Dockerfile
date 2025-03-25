@@ -2,12 +2,12 @@
 FROM python:3.12-slim-bullseye
 
 # Prevent Python from writing .pyc files and buffering outputs
-ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONDONTWRITEBYTECODE=1 
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies (including python3-distutils and python3-setuptools)
+# Install system dependencies 
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
@@ -25,9 +25,11 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements file into the container
 COPY requirements.txt .
 
-# Upgrade pip and install torch and torchvision (CPU-only) using the direct wheel URLs,
-# then install the remaining dependencies.
+# Upgrade pip and install dependencies
 RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+    torch @ https://download.pytorch.org/whl/cpu/torch-2.2.1+cpu-cp312-cp312-linux_x86_64.whl \
+    torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.17.1+cpu-cp312-cp312-linux_x86_64.whl && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project code into the container
