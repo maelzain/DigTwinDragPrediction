@@ -1,26 +1,77 @@
-version: '3.8'
+version: '3.9'
+
+x-common-environment: &common-env
+  environment:
+    - PYTHONUNBUFFERED=1
+    - ENV=development
+
+x-common-volumes: &common-volumes
+  volumes:
+    - .:/app
+    - ./logs:/app/logs
+    - ./data:/app/data
 
 services:
   streamlit:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
-    command: streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+      target: app
+    command: streamlit run streamlit_app.py 
+      --server.port=8501 
+      --server.address=0.0.0.0
+      --server.enableCORS=false
     ports:
       - "8501:8501"
-    environment:
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - .:/app
+    <<: *common-env
+    <<: *common-volumes
+    develop:
+      watch:
+        - action: sync
+          path: ./streamlit_app.py
+          target: /app/streamlit_app.py
+        - action: rebuild
+          files:
+            - requirements.txt
+            - Dockerfile
 
   api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
-    command: python api.py
+      target: app
+    command: gunicorn 
+      --workers=3 
+      --bind=0.0.0.0:5000 
+      --access-logfile=/app/logs/gunicorn_access.log 
+      --error-logfile=/app/logs/gunicorn_error.log 
+      api:app
     ports:
       - "5000:5000"
-    environment:
-      - PYTHONUNBUFFERED=1
+    <<: *common-env
+    <<: *common-volumes
+    develop:
+      watch:
+        - action: sync
+          path: ./api.py
+          target: /app/api.py
+        - action: rebuild
+          files:
+            - requirements.txt
+            - Dockerfile
+
+  # Optional: Add monitoring or additional services
+  prometheus:
+    image: prom/prometheus
     volumes:
-      - .:/app
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+volumes:
+  logs:
+  data:
+
+networks:
+  app_network:
+    driver: bridge
