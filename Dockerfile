@@ -26,10 +26,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Upgrade pip and install torch and torchvision (CPU-only) from the official wheels,
-# then install the remaining dependencies from requirements.txt using only binary wheels.
+# then install the remaining dependencies from requirements.txt from PyPI.
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir torch==2.2.1+cpu torchvision==0.17.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt --index-url https://pypi.org/simple
 
 # Copy the rest of the project code into the container
 COPY . .
