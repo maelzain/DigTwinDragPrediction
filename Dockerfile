@@ -60,8 +60,9 @@ COPY --chown=appuser:appuser requirements.txt .
 # Install Python dependencies with optimized PyTorch and other requirements
 RUN pip install \
     --index-url https://download.pytorch.org/whl/cpu \
-    torch==2.2.1 \
-    torchvision==0.17.1 \
+    torch==2.2.2 \
+    torchvision==0.17.2 \
+    torchaudio==2.2.2 \
     --extra-index-url https://pypi.org/simple \
     -r requirements.txt \
     --no-cache-dir \
@@ -88,7 +89,7 @@ USER appuser
 EXPOSE 8501 5000
 
 # Performance and resource optimizations
-ENV PYTHONHASHSEED=0
+ENV PYTHONHASHSEED=0    
 ENV PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
 
 # Healthcheck to monitor container health
