@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies (for PyTorch, image processing, etc.)
+# Install system dependencies (including python3-distutils to fix missing distutils)
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
@@ -18,18 +18,22 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     libjpeg-dev \
     zlib1g-dev \
+    python3-distutils \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install PyTorch (CPU-only) using the official binaries
+# Copy requirements file into the container
 COPY requirements.txt .
+
+# Upgrade pip and install PyTorch (CPU-only) with a compatible version of torchvision,
+# then install the rest of the dependencies.
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir torch==2.2.0+cpu torchvision==0.17.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project code into the container
 COPY . .
 
-# Expose the necessary ports for Streamlit (8501) and Flask API (5000)
+# Expose necessary ports for Streamlit (8501) and Flask API (5000)
 EXPOSE 8501 5000
 
 # Copy and grant execution permission for the startup script
