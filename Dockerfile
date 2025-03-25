@@ -27,7 +27,7 @@ COPY requirements.txt .
 # Upgrade pip and install PyTorch (CPU-only) with a compatible version of torchvision,
 # then install the rest of the dependencies.
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir torch==2.2.0+cpu torchvision==0.17.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
+pip install --no-cache-dir torch==2.2.1+cpu torchvision==0.17.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project code into the container
