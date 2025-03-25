@@ -1,9 +1,14 @@
-pandas
-numpy>=1.25.0
-scikit-learn
-matplotlib
-pillow
-pyyaml
-streamlit
-flask
+# Install PyTorch and torchvision using the official CPU wheel URLs
+torch @ https://download.pytorch.org/whl/cpu/torch-2.2.1+cpu-cp310-cp310-linux_x86_64.whl
+torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.17.1+cpu-cp310-cp310-linux_x86_64.whl
+
+# Other dependencies (pin versions for reproducibility)
+pandas==2.2.3
+numpy==1.24.3
+scikit-learn==1.6.1
+matplotlib==3.10.1
+pillow==11.1.0
+pyyaml==6.0.2
+streamlit==1.43.2
+flask==3.1.0
 plotly>=6.0.0
