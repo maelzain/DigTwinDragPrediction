@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies (including python3-distutils and python3-setuptools)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     python3-dev \
@@ -18,15 +18,12 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     libjpeg-dev \
     zlib1g-dev \
-    python3-distutils \
-    python3-setuptools \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file into the container
 COPY requirements.txt .
 
-# Upgrade pip and install torch and torchvision (CPU-only) from the official wheels,
-# then install the remaining dependencies from requirements.txt from PyPI.
+# Upgrade pip and install dependencies
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir torch==2.2.1+cpu torchvision==0.17.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt --index-url https://pypi.org/simple
