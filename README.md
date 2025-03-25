@@ -111,7 +111,7 @@ Contributions are welcome! Please:
 - 🐙 GitHub: [maelzain](https://github.com/maelzain/DigTwinDragPrediction)
 
 ## 📄 License
-[Specify your license here]
+AUB
 
 ## 💡 Acknowledgments
 [DR.AmmarMohanna]
