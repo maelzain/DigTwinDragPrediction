@@ -1,5 +1,5 @@
-# Use a slim Python 3.10 image on Bullseye
-FROM python:3.10-slim-bullseye
+# Use a slim Python 3.12 image on Bullseye
+FROM python:3.12-slim-bullseye
 
 # Prevent Python from writing .pyc files and buffering outputs
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -25,11 +25,10 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements file into the container
 COPY requirements.txt .
 
-# Upgrade pip and install torch and torchvision (CPU-only) explicitly,
-# then install the remaining dependencies from PyPI.
+# Upgrade pip and install torch and torchvision (CPU-only) using the direct wheel URLs,
+# then install the remaining dependencies.
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir torch==2.2.1+cpu torchvision==0.17.1+cpu --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt --index-url https://pypi.org/simple
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the project code into the container
 COPY . .

@@ -1,8 +1,8 @@
-# Install PyTorch and torchvision using the official CPU wheel URLs
-torch @ https://download.pytorch.org/whl/cpu/torch-2.2.1+cpu-cp310-cp310-linux_x86_64.whl
-torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.17.1+cpu-cp310-cp310-linux_x86_64.whl
+# Use direct wheel URLs for CPU-only PyTorch packages for Python 3.12.
+torch @ https://download.pytorch.org/whl/cpu/torch-2.2.1+cpu-cp312-cp312-linux_x86_64.whl
+torchvision @ https://download.pytorch.org/whl/cpu/torchvision-0.17.1+cpu-cp312-cp312-linux_x86_64.whl
 
-# Other dependencies (pin versions for reproducibility)
+# Other pinned dependencies for reproducibility.
 pandas==2.2.3
 numpy==1.24.3
 scikit-learn==1.6.1
