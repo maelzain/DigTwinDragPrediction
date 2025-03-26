@@ -1,8 +1,5 @@
-import os 
-import io
+import os
 import time
-import base64
-import logging
 import streamlit as st
 import torch
 import yaml
@@ -20,10 +17,6 @@ def load_config():
         return yaml.safe_load(f)
 
 def is_valid_contour_image(filename, image):
-    """
-    Validate that the image is likely a velocity contour plot.
-    Checks that the filename contains expected keywords and that image contrast is sufficient.
-    """
     expected_keywords = ["timestep", "re", "contour"]
     if not any(keyword in filename.lower() for keyword in expected_keywords):
         st.error("Filename must include keywords like 'timestep', 're', or 'contour'.")
@@ -34,36 +27,15 @@ def is_valid_contour_image(filename, image):
         return False
     return True
 
-def predict_drag(model, image, device, reynolds_group=None):
-    """
-    Preprocess the image, run the model, and return the drag prediction.
-    Supports both normalized and physical unit predictions based on Reynolds group.
-    """
-    # Precomputed drag ranges from raw CSV data
-    drag_ranges = {
-        "re37": (3.26926e-07, 3.33207e-07),
-        "re75": (1.01e-06, 1.04e-06),
-        "re150": (3.15e-06, 0.000130279),
-        "re300": (1.4e-05, 1.6e-05)
-    }
-    
+def predict_drag(model, image, device):
     transform = transforms.Compose([transforms.ToTensor()])
     img_tensor = transform(image).unsqueeze(0).to(device)
-    
     with torch.no_grad():
         output = model(img_tensor)
-        # Handle tuple outputs (e.g., CNN+LSTM returning latent and prediction)
         if isinstance(output, tuple):
             _, drag_pred = output
         else:
             drag_pred = output
-    
-    # If Reynolds group is provided, convert normalized prediction to physical units
-    if reynolds_group and reynolds_group in drag_ranges:
-        drag_min, drag_max = drag_ranges[reynolds_group]
-        physical_drag = drag_pred.item() * (drag_max - drag_min) + drag_min
-        return physical_drag
-    
     return drag_pred.item()
 
 def main():
@@ -73,18 +45,15 @@ def main():
     Upload a **velocity contour plot** of a 2D unsteady flow around a sphere to instantly receive a drag prediction.
     
     **Why It Matters:**  
-    Traditional CFD simulations, even with proper geometry and meshing, can take around 1 hour and incur significant computational costs.
-    Our solution delivers predictions in seconds, saving you both time and money.
+    Traditional CFD simulations can take around 1 hour with significant computational cost.
+    Our solution delivers predictions in seconds—saving you time and money.
     """)
-    
+
     config = load_config()
     device = config.get("device", "cpu")
-    model_choice = st.selectbox("Select Prediction Model", ["Optimized CNN", "Baseline MLP"])
+    model_choice = st.selectbox("Select Prediction Model", ["Optimized CNN", "Baseline MLP"], key="model_choice")
+    reynolds_group = st.selectbox("Select Reynolds Group", ["re37", "re75", "re150", "re300"], key="reynolds_group")
     
-    # Let the user select the Reynolds group associated with the data
-    reynolds_group = st.selectbox("Select Reynolds Group", ["re37", "re75", "re150", "re300"])
-    
-    # Load the selected model
     if model_choice == "Optimized CNN":
         model_path = os.path.join("models", "cnn_drag_predictor.pth")
         model = CNNDragPredictor(latent_dim=config["cnn"].get("latent_dim", 128)).to(device)
@@ -100,11 +69,9 @@ def main():
         st.error(f"Error loading model: {e}")
         return
 
-    uploaded_file = st.file_uploader("Upload a contour plot image...", type=["png", "jpg", "jpeg"])
-    
+    uploaded_file = st.file_uploader("Upload a contour plot image...", type=["png", "jpg", "jpeg"], key="uploaded_file")
     if uploaded_file is not None:
         try:
-            # Open and resize image to expected dimensions
             image = Image.open(uploaded_file).convert("L").resize((64, 64))
         except Exception as e:
             st.error(f"Error loading image: {e}")
@@ -116,7 +83,6 @@ def main():
 
         st.image(image, caption="Uploaded Snapshot", use_container_width=True)
 
-        # Display interactive Plotly contour plot from the image
         image_array = np.array(image)
         contour_fig = go.Figure(data=go.Contour(
             z=image_array,
@@ -126,7 +92,6 @@ def main():
         contour_fig.update_layout(title="Interactive Contour Plot", autosize=True)
         st.plotly_chart(contour_fig, use_container_width=True)
         
-        # Simulated time-series plot: average intensity along rows
         time_axis = np.arange(image_array.shape[0])
         intensity = np.mean(image_array, axis=1)
         ts_fig = px.line(x=time_axis, y=intensity,
@@ -134,17 +99,27 @@ def main():
                          title="Simulated Time-Series of Intensity")
         st.plotly_chart(ts_fig, use_container_width=True)
         
-        # Inference: get the drag prediction and compute inference time
         start_time = time.time()
-        predicted_drag = predict_drag(model, image, device, reynolds_group)
+        drag_norm = predict_drag(model, image, device)
         inference_time = time.time() - start_time
         
-        st.markdown(f"**Predicted Drag ({model_choice} for {reynolds_group}):** {predicted_drag:.8f} (physical units)")
+        drag_ranges = {
+            "re37": (3.26926e-07, 3.33207e-07),
+            "re75": (1.01e-06, 1.04e-06),
+            "re150": (3.15e-06, 0.000130279),
+            "re300": (1.4e-05, 1.6e-05)
+        }
+        if reynolds_group in drag_ranges:
+            drag_min, drag_max = drag_ranges[reynolds_group]
+            predicted_drag = drag_norm * (drag_max - drag_min) + drag_min
+        else:
+            predicted_drag = drag_norm
+        
+        st.markdown(f"**Predicted Drag ({model_choice}):** {predicted_drag:.8f} (physical units)")
         st.markdown(f"**Inference Time:** {inference_time:.3f} seconds")
         
-        # Benchmark values for traditional CFD simulation
-        typical_simulation_time = 3600  # seconds (1 hour)
-        typical_simulation_cost = 50.0    # dollars per simulation (average across platforms)
+        typical_simulation_time = 3600  # seconds
+        typical_simulation_cost = 50.0    # dollars per simulation
         time_saved = typical_simulation_time - inference_time
         percent_time_saved = (time_saved / typical_simulation_time) * 100
         
@@ -156,7 +131,6 @@ def main():
         st.markdown("### Additional Evaluation Visualizations")
         st.markdown("Download evaluation plots or review detailed error analyses from our robust evaluation module below.")
         
-        # Provide a download button for an evaluation plot if available
         eval_plot_path = os.path.join("evaluation_plots", "cnn_lstm_final_comparison.png")
         if os.path.exists(eval_plot_path):
             with open(eval_plot_path, "rb") as file:
@@ -168,6 +142,6 @@ def main():
                 )
         else:
             st.info("Evaluation plot not available. Run the evaluation script to generate plots.")
-        
+
 if __name__ == "__main__":
     main()

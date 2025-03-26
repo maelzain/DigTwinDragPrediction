@@ -1,76 +1,82 @@
 # Digital Twin for 2D Unsteady Flow Drag Prediction
 
-## 🚀 Project Overview
+## Overview
 
-A cutting-edge machine learning solution integrating traditional Computational Fluid Dynamics (CFD) techniques to predict instantaneous drag forces on a sphere in a 2D unsteady flow field.
+This project presents a state-of-the-art machine learning framework that integrates traditional Computational Fluid Dynamics (CFD) techniques with modern deep learning methods to predict instantaneous drag forces on a sphere in a 2D unsteady flow field. The solution is designed to significantly reduce simulation time and computational cost, enabling real-time analysis and design optimization.
 
-### 🌟 Key Features
-- **Advanced ML Models:** Baseline MLP and Optimized CNN-LSTM architecture
-- **Containerized Deployment:** Docker and Docker Compose support
-- **Interactive Interfaces:** Streamlit UI and Flask API
-- **Comprehensive Evaluation:** Robust performance metrics and visualization
+## 🚀 Key Features
 
-## 📊 Technical Approach
+- **Advanced ML Models:** Deploys both a baseline Multilayer Perceptron (MLP) and an optimized CNN-LSTM architecture for robust drag prediction
+- **Containerized Deployment:** Fully containerized with Docker and Docker Compose, ensuring consistency and scalability across environments
+- **Interactive Interfaces:** Features an intuitive Streamlit UI for real-time user interaction and a Flask-based API for programmatic access
+- **Comprehensive Evaluation:** Provides detailed performance metrics and visualizations to validate and benchmark model predictions against traditional CFD simulations
+
+## 🛠 Technical Approach
 
 ### Data Preprocessing
-- Image Processing: CFD snapshots converted to 64×64 grayscale
-- Drag Force Normalization: MinMax scaling for precise prediction
-- Data Split: 70% training, 10% validation, 20% testing
+
+- **Image Processing:** CFD snapshots are converted to 64×64 grayscale images
+- **Normalization:** Drag force values are normalized using MinMax scaling
+- **Data Splitting:** Dataset divided into 70% training, 10% validation, and 20% testing sets
 
 ### Modeling Pipeline
-1. **Baseline Model:** Multilayer Perceptron (MLP)
-2. **Optimized Model:** 
-   - CNN for feature extraction
-   - LSTM for temporal evolution
-   - Drag force prediction
 
-## 🛠 Installation & Setup
+1. **Baseline Model:** Multilayer Perceptron (MLP) for initial drag force predictions
+2. **Optimized Model:**
+   - **CNN:** Extracts spatial features from CFD snapshots
+   - **LSTM:** Captures temporal evolution of latent states
+   - **Drag Prediction:** Combines CNN-extracted features and LSTM temporal dynamics
+
+## 🔧 Installation & Setup
 
 ### Prerequisites
+
 - Git
-- Docker
-- Docker Compose
+- Docker & Docker Compose
 - Modern Web Browser
 
 ### Quick Start
 
+#### Option A: Deploy Using Docker
+
 ```bash
-# Clone the Repository
 git clone https://github.com/maelzain/DigTwinDragPrediction.git
 cd DigTwinDragPrediction
-
-# Build Docker Image
-docker build -t drag-prediction .
-
-# Launch Services
-docker-compose up
+docker-compose up --build
 ```
 
-### Access Services
-- **API:** http://localhost:5000
+Access services:
 - **Streamlit UI:** http://localhost:8501
+- **API:** http://localhost:5000
+
+#### Option B: Run Locally
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
 
 ## 🧪 Testing & Evaluation
 
 ### API Testing
-1. Convert image to base64 string
-2. Send POST request to `/predict_drag`
+
+- Convert contour plot image to base64 string
+- Send POST request to `/predict_drag` endpoint
 
 ### Model Evaluation
+
 ```bash
 python train.py
 python evaluate.py
 ```
 
-## 🌐 Business Value
+## 💼 Business Value
 
-Our digital twin tool accelerates engineering design cycles by:
-- Reducing simulation time
-- Enhancing computational efficiency
-- Providing real-time drag predictions
-- Supporting aerospace, automotive, and environmental engineering
+- Accelerates engineering design cycles
+- Enhances computational efficiency
+- Provides real-time drag force estimates for aerospace, automotive, and environmental engineering
 
-## 🚧 Project Structure
+## 📂 Project Structure
 
 ```
 DigitalTwinDragPrediction/
@@ -85,33 +91,39 @@ DigitalTwinDragPrediction/
 │   │   └── data_loader.py
 │   └── train.py
 ├── data/
-│   └── CFD snapshots by Reynolds number
+│   └── CFD snapshots (organized by Reynolds number)
 ├── streamlit_app.py
-├── api.py
+├── api_server.py
 ├── Dockerfile
-└── docker-compose.yml
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
 ```
 
-## 🔭 Future Roadmap
-- 3D Flow Field Extension
-- Real-Time Sensor Data Integration
-- Advanced MLOps Pipelines
-- Enhanced Visualization Dashboards
+## 🚧 Future Roadmap
+
+- Extend framework to 3D flow fields
+- Integrate real-time sensor data
+- Develop advanced MLOps pipelines
+- Enhance visualization dashboards
 
 ## 🤝 Contributing
-Contributions are welcome! Please:
-- Open an issue
+
+Contributions are welcome! To contribute:
+- Open an issue for discussion
 - Submit a pull request
-- Follow project coding standards
+- Follow established coding standards
 
 ## 📞 Contact
 
 **Mahdi ELzain**
-- 📧 Email: mahdielzain@outlook.com
-- 🐙 GitHub: [maelzain](https://github.com/maelzain/DigTwinDragPrediction)
+- **Email:** mahdielzain@outlook.com
+- **GitHub:** [@maelzain](https://github.com/maelzain)
 
 ## 📄 License
+
 AUB
 
-## 💡 Acknowledgments
-[DR.AmmarMohanna]
+## 🙏 Acknowledgments
+
+Special thanks to Dr. Ammar Mohanna for valuable guidance and support.

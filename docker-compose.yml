@@ -1,16 +1,12 @@
-version: '3.9'
+version: "3.8"
 
-# Shared environment configurations
-x-common-environment: &common-env
+x-common-env: &common-env
   environment:
     - PYTHONUNBUFFERED=1
     - ENVIRONMENT=production
     - LOGGING_LEVEL=INFO
     - TZ=UTC
-  env_file:
-    - .env.production
 
-# Shared volume configurations
 x-common-volumes: &common-volumes
   volumes:
     - ./:/app
@@ -21,7 +17,6 @@ x-common-volumes: &common-volumes
       source: model-cache
       target: /app/models
 
-# Shared health check configuration
 x-common-healthcheck: &common-healthcheck
   healthcheck:
     interval: 30s
@@ -37,27 +32,13 @@ services:
       target: app
       cache_from:
         - python:3.12-slim-bullseye
+    # The command now disables both auto-reload on save and file watching.
     command: >
-      sh -c "streamlit run streamlit_app.py 
-      --server.port=8501 
-      --server.address=0.0.0.0
-      --server.enableCORS=false
-      --logger.level=info"
+      sh -c "streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=true --server.runOnSave=false --server.fileWatcherType none"
     ports:
       - "8501:8501"
-    <<: *common-env
-    <<: *common-volumes
-    <<: *common-healthcheck
+    <<: [*common-env, *common-volumes, *common-healthcheck]
     restart: unless-stopped
-    develop:
-      watch:
-        - action: sync
-          path: ./streamlit_app.py
-          target: /app/streamlit_app.py
-        - action: rebuild
-          files:
-            - requirements.txt
-            - Dockerfile
 
   api:
     build:
@@ -67,72 +48,13 @@ services:
       cache_from:
         - python:3.12-slim-bullseye
     command: >
-      sh -c "gunicorn 
-      --workers=4 
-      --threads=2 
-      --bind=0.0.0.0:5000 
-      --access-logfile=/app/logs/gunicorn_access.log 
-      --error-logfile=/app/logs/gunicorn_error.log 
-      --capture-output
-      --log-level=info
-      api:app"
+      sh -c "gunicorn --workers=4 --threads=2 --bind=0.0.0.0:5000 --access-logfile=/app/logs/gunicorn_access.log --error-logfile=/app/logs/gunicorn_error.log --capture-output --log-level=info api_server:app"
     ports:
       - "5000:5000"
-    <<: *common-env
-    <<: *common-volumes
-    <<: *common-healthcheck
-    restart: unless-stopped
-    develop:
-      watch:
-        - action: sync
-          path: ./api.py
-          target: /app/api.py
-        - action: rebuild
-          files:
-            - requirements.txt
-            - Dockerfile
-
-  # Monitoring and Observability Services
-  prometheus:
-    image: prom/prometheus:v2.45.0
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--web.enable-lifecycle'
+    <<: [*common-env, *common-volumes, *common-healthcheck]
     restart: unless-stopped
 
-  grafana:
-    image: grafana/grafana:9.5.3
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=changeme
-    restart: unless-stopped
-    depends_on:
-      - prometheus
-
-# Persistent volumes for data preservation
 volumes:
-  prometheus_data:
-  grafana_data:
   model-cache:
   logs:
   data:
-
-# Network configuration for inter-service communication
-networks:
-  default:
-    name: digital-twin-network
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.default_bridge: "true"
