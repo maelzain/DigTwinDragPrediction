@@ -2,13 +2,11 @@ import os
 import logging
 import yaml
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, random_split, TensorDataset
+from torch.utils.data import TensorDataset, random_split, Subset
+from itertools import product
+
 from code.utils.data_loader import ReynoldsDataLoader
-from code.models.baseline_model import BaselineMLP
-from code.models.cnn_model import CNNDragPredictor
-from code.models.lstm_model import LSTMDragPredictor
+from train import train_baseline_model, train_cnn_model, train_lstm_model
 
 def load_config(config_path="config.yaml"):
     with open(config_path, "r") as f:
@@ -16,143 +14,105 @@ def load_config(config_path="config.yaml"):
     logging.info(f"Config loaded with keys: {list(config.keys())}")
     return config
 
-def split_dataset(images, drags, train_ratio, test_ratio, eval_ratio):
+def split_full_dataset(images, drags, train_ratio, test_ratio, eval_ratio):
     """
-    Split dataset into training, testing, and evaluation sets.
+    Immediately split the full dataset into a training set and a final holdout test set.
+    (Here we ignore eval if eval_ratio is 0.)
     """
     total_samples = images.shape[0]
-    train_size = int(train_ratio * total_samples)
     test_size = int(test_ratio * total_samples)
-    eval_size = total_samples - train_size - test_size
-    train_dataset, test_dataset, eval_dataset = random_split(
-        TensorDataset(images, drags), [train_size, test_size, eval_size]
-    )
-    logging.info(f"Dataset split: {train_size} training, {test_size} testing, {eval_size} evaluation samples.")
-    return train_dataset, test_dataset, eval_dataset
+    train_size = total_samples - test_size
+    full_dataset = TensorDataset(images, drags)
+    train_dataset, final_test_dataset = random_split(full_dataset, [train_size, test_size])
+    logging.info(f"Training dataset: {len(train_dataset)} samples, Final test dataset: {len(final_test_dataset)} samples.")
+    return train_dataset, final_test_dataset
 
-def train_baseline_model(train_dataset, config, device="cpu"):
-    batch_size = config["baseline"].get("batch_size", 64)
-    lr = config["baseline"].get("learning_rate", 0.0005)
-    epochs = config["baseline"].get("epochs", 100)
-    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    sample_image, _ = train_dataset[0]
-    input_dim = sample_image.numel()
-    model = BaselineMLP(input_dim=input_dim, hidden_dim=128).to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    logging.info(f"Training Baseline MLP for {epochs} epochs on {device}")
-    model.train()
-    for epoch in range(1, epochs + 1):
-        running_loss = 0.0
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
-            optimizer.zero_grad()
-            y_pred = model(x)
-            loss = criterion(y_pred, y)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item() * x.size(0)
-        epoch_loss = running_loss / len(train_dataset)
-        if epoch % 10 == 0 or epoch == epochs:
-            logging.info(f"[Baseline] Epoch {epoch}/{epochs}, Loss: {epoch_loss:.6f}")
-    return model
-
-def train_cnn_model(train_dataset, config, device="cpu"):
-    batch_size = config["cnn"].get("batch_size", 256)
-    lr = config["cnn"].get("learning_rate", 0.0005)
-    epochs = config["cnn"].get("epochs", 150)
-    latent_dim = config["cnn"].get("latent_dim", 128)
-    
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    model = CNNDragPredictor(latent_dim=latent_dim).to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-
-    logging.info(f"Training CNN for {epochs} epochs on {device}")
-    model.train()
-    for epoch in range(1, epochs + 1):
-        running_loss = 0.0
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
-            optimizer.zero_grad()
-            latent, drag_pred = model(x)
-            loss = criterion(drag_pred, y)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item() * x.size(0)
-        epoch_loss = running_loss / len(train_dataset)
-        if epoch % 10 == 0 or epoch == epochs:
-            logging.info(f"[CNN] Epoch {epoch}/{epochs}, Drag Loss: {epoch_loss:.6f}")
-    return model
-
-def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
+def grid_search_cnn_lstm(train_dataset, config, device, folds=5):
     """
-    Trains the LSTM model to evolve CNN latent vectors over time with physics-informed loss.
+    Perform grid search on the CNN+LSTM pipeline hyperparameters using K-fold cross-validation.
+    The search is done solely on the training set so the final test set remains untouched.
     """
-    lstm_epochs = config["lstm"].get("epochs", 100)
-    lstm_lr = config["lstm"].get("learning_rate", 0.0005)
-    physics_loss_weight = config["lstm"].get("physics_loss_weight", 0.005)
-    input_size = config["lstm"].get("input_size", 128)
-    hidden_size = config["lstm"].get("hidden_size", 64)
-    num_layers = config["lstm"].get("num_layers", 2)
-    output_size = config["lstm"].get("output_size", 1)
+    # Define grid for CNN and LSTM hyperparameters
+    param_grid = {
+        "cnn.learning_rate": [0.0001, 0.0005],
+        "cnn.epochs": [30, 50],
+        "cnn.batch_size": [10, 20],
+        "cnn.latent_dim": [128, 256],
+        "lstm.learning_rate": [0.0001, 0.0005],
+        "lstm.epochs": [50, 100],
+        "lstm.batch_size": [32, 64],
+        "lstm.hidden_size": [64, 128]
+    }
+    best_score = float('inf')
+    best_params = {}
     
-    # Extract latent features using the pre-trained CNN
-    cnn_model.eval()
-    latents = []
-    with torch.no_grad():
-        for i in range(train_dataset.__len__()):
-            x, _ = train_dataset[i]
-            latent, _ = cnn_model(x.unsqueeze(0).to(device))
-            latents.append(latent.cpu())
-    latents = torch.cat(latents, dim=0)  # Shape: (N, latent_dim)
+    total_samples = len(train_dataset)
+    indices = list(range(total_samples))
+    fold_size = total_samples // folds
+    keys = list(param_grid.keys())
+    values = [param_grid[k] for k in keys]
     
-    # Prepare dataset and dataloader for LSTM training
-    dataset = TensorDataset(latents, torch.cat([y for _, y in train_dataset], dim=0))
-    batch_size = config["lstm"].get("batch_size", 64)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    for combo in product(*values):
+        # Update the configuration with the current grid values
+        for key, value in zip(keys, combo):
+            section, param = key.split('.')
+            config[section][param] = value
+        
+        cv_losses = []
+        for fold in range(folds):
+            val_start = fold * fold_size
+            val_end = (fold + 1) * fold_size if fold != folds - 1 else total_samples
+            val_indices = indices[val_start:val_end]
+            train_indices = indices[:val_start] + indices[val_end:]
+            
+            cv_train_subset = Subset(train_dataset, train_indices)
+            cv_val_subset = Subset(train_dataset, val_indices)
+            
+            # Train CNN on the CV training fold
+            cnn_model = train_cnn_model(cv_train_subset, config, device=device)
+            # Then train LSTM using the CNN's latent features on the same CV training fold
+            lstm_model = train_lstm_model(cnn_model, cv_train_subset, config, device=device)
+            
+            # Evaluate on the CV validation fold
+            cnn_model.eval()
+            lstm_model.eval()
+            criterion = torch.nn.MSELoss()
+            val_loss = 0.0
+            with torch.no_grad():
+                for x, y in cv_val_subset:
+                    x = x.unsqueeze(0).to(device)
+                    y = y.to(device)
+                    # Get latent vector from CNN
+                    latent, _ = cnn_model(x)
+                    latent_seq = latent.unsqueeze(1)  # Reshape for LSTM: (seq_len, batch, input_size)
+                    pred_seq, _ = lstm_model(latent_seq)
+                    pred = pred_seq.squeeze()  # May result in 0-dim tensor
+                    if pred.dim() == 0:
+                        pred = pred.unsqueeze(0)
+                    if y.dim() == 0:
+                        y = y.unsqueeze(0)
+                    loss = criterion(pred, y)
+                    val_loss += loss.item()
+            avg_loss = val_loss / len(cv_val_subset)
+            cv_losses.append(avg_loss)
+        
+        mean_cv_loss = sum(cv_losses) / len(cv_losses)
+        logging.info(f"Grid Search CNN+LSTM: params={combo} => Mean CV Loss: {mean_cv_loss:.6f}")
+        if mean_cv_loss < best_score:
+            best_score = mean_cv_loss
+            best_params = {k: v for k, v in zip(keys, combo)}
     
-    # Reshape latent features for LSTM: (seq_len, batch, input_size)
-    latents_all = latents.unsqueeze(1)
-    
-    lstm_model = LSTMDragPredictor(
-        input_size=input_size,
-        hidden_size=hidden_size,
-        num_layers=num_layers,
-        output_size=output_size
-    ).to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(lstm_model.parameters(), lr=lstm_lr)
-    
-    logging.info(f"Training LSTM for {lstm_epochs} epochs on {device}")
-    lstm_model.train()
-    for epoch in range(1, lstm_epochs + 1):
-        optimizer.zero_grad()
-        pred_seq, _ = lstm_model(latents_all)  # Expected shape: (seq_len, 1, 1)
-        pred_seq = pred_seq.squeeze()           # Shape: (seq_len,)
-        mse_loss = criterion(pred_seq, torch.cat([y for _, y in train_dataset], dim=0).squeeze())
-        # Physics-informed loss (smoothness via finite differences)
-        if pred_seq.size(0) > 1:
-            diff_pred = pred_seq[1:] - pred_seq[:-1]
-            physics_loss = torch.mean(diff_pred ** 2)
-        else:
-            physics_loss = 0.0
-        total_loss = mse_loss + physics_loss_weight * physics_loss
-        total_loss.backward()
-        optimizer.step()
-        if epoch % 5 == 0 or epoch == lstm_epochs:
-            logging.info(f"[LSTM] Epoch {epoch}/{lstm_epochs} - MSE: {mse_loss.item():.6f}, Physics: {physics_loss if isinstance(physics_loss, float) else physics_loss.item():.6f}, Total: {total_loss.item():.6f}")
-    return lstm_model
+    return best_params, best_score
 
 def main():
+    # Set logging and fixed random seed for reproducibility
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    torch.manual_seed(42)
+    
     config = load_config()
     device = config.get("device", "cpu")
     
-    # Load dataset from Reynolds folders
-    from code.utils.data_loader import ReynoldsDataLoader
+    # Load dataset using ReynoldsDataLoader
     loader = ReynoldsDataLoader(config)
     data_dict = loader.load_dataset()
     all_images, all_drags = [], []
@@ -163,31 +123,41 @@ def main():
     if not all_images:
         logging.error("No valid images found in dataset.")
         return
+    
     images_combined = torch.cat(all_images, dim=0)
     drags_combined = torch.cat(all_drags, dim=0)
-    logging.info(f"Combined images shape: {images_combined.shape}")
-    logging.info(f"Combined drags shape: {drags_combined.shape}")
     
-    # Split dataset: 70% training, 10% testing, 10% evaluation
-    train_ratio = config["split"].get("train_ratio", 0.7)
-    test_ratio = config["split"].get("test_ratio", 0.1)
-    eval_ratio = config["split"].get("eval_ratio", 0.1)
-    train_dataset, test_dataset, eval_dataset = split_dataset(images_combined, drags_combined, train_ratio, test_ratio, eval_ratio)
+    # Split the dataset into training and final test sets immediately.
+    train_dataset, final_test_dataset = split_full_dataset(images_combined, drags_combined,
+                                                           config["split"]["train_ratio"],
+                                                           config["split"]["test_ratio"],
+                                                           config["split"]["eval_ratio"])
     
-    # Train Baseline Model
+    # Run grid search on the CNN+LSTM pipeline if enabled
+    if config.get("grid_search", False):
+        logging.info("Starting grid search for CNN+LSTM hyperparameters.")
+        best_params, best_score = grid_search_cnn_lstm(train_dataset, config, device=device,
+                                                       folds=config["robust_evaluation"].get("folds", 5))
+        logging.info(f"Best CNN+LSTM hyperparameters: {best_params} with CV Loss: {best_score:.6f}")
+        # Update the config with the best parameters found
+        for key, value in best_params.items():
+            section, param = key.split('.')
+            config[section][param] = value
+    
+    # Train final models on the entire training set using the (tuned) hyperparameters.
+    cnn_model = train_cnn_model(train_dataset, config, device=device)
+    lstm_model = train_lstm_model(cnn_model, train_dataset, config, device=device)
+    
+    # Optionally, you may also train the baseline model if needed.
     baseline_model = train_baseline_model(train_dataset, config, device=device)
+    
     os.makedirs("models", exist_ok=True)
     torch.save(baseline_model.state_dict(), os.path.join("models", "baseline_mlp.pth"))
-    
-    # Train CNN Model
-    cnn_model = train_cnn_model(train_dataset, config, device=device)
     torch.save(cnn_model.state_dict(), os.path.join("models", "cnn_drag_predictor.pth"))
-    
-    # Train LSTM Model using CNN latent features with physics-informed loss
-    lstm_model = train_lstm_model(cnn_model, train_dataset, config, device=device)
     torch.save(lstm_model.state_dict(), os.path.join("models", "lstm_drag.pth"))
     
     logging.info("Training completed. Models saved in the 'models' directory.")
-
+    # Final evaluation on the holdout test set should be done in evaluate.py.
+    
 if __name__ == "__main__":
     main()

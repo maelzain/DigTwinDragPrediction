@@ -5,7 +5,7 @@ reynolds: [37, 75, 150, 300]
 resize: [64, 64]
 augment: true
 device: "cpu"
-drag_normalization: "minmax"  # Using minmax to ensure all drag values are scaled between 0 and 1
+drag_normalization: "minmax"  # Scale drag values between 0 and 1 using minmax scaling
 
 # Baseline Model Configuration
 baseline:
@@ -24,7 +24,7 @@ cnn:
 lstm:
   input_size: 128        # Must match CNN latent_dim
   hidden_size: 64
-  num_layers: 2
+  num_layers: 1
   output_size: 1
   epochs: 100
   learning_rate: 0.0005
@@ -33,13 +33,16 @@ lstm:
 
 # Data Splitting Configuration
 split:
-  train_ratio: 0.7
-  test_ratio: 0.1
-  eval_ratio: 0.1
+  train_ratio: 0.8
+  test_ratio: 0.2
+  eval_ratio: 0
 
-# Robust Evaluation Settings
+# Robust Evaluation Settings (K-Fold)
 robust_evaluation:
   folds: 5
+
+# Flag for Grid Search Hyperparameter Tuning for CNN+LSTM pipeline
+grid_search: true
 
 # Flag for interactive plots in UI
 show_interactive: true
