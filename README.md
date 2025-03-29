@@ -66,11 +66,21 @@ This project presents a state-of-the-art machine learning framework that integra
 - **Data Splitting:** Dataset divided into 70% training, 10% validation, and 20% testing sets
 
 ### Modeling Pipeline
-1. **Baseline Model:** Multilayer Perceptron (MLP) for initial drag force predictions
+1. **Baseline Model:** Multilayer Perceptron (MLP) for initial drag force predictions.
 2. **Optimized Model:**
-    - **CNN:** Extracts spatial features from CFD snapshots
-    - **LSTM:** Captures temporal evolution of latent states
-    - **Drag Prediction:** Combines CNN-extracted features and LSTM temporal dynamics
+   - **CNN:** Extracts spatial features from CFD snapshots.
+   - **LSTM:** Captures temporal evolution of latent states from CNN outputs.
+   - **Drag Prediction:** The combined CNN+LSTM pipeline outputs a single normalized drag value per input sample.
+   - **Grid Search Hyperparameter Tuning:** An automated grid search (with K-fold cross-validation on the training set) is now applied to the CNN+LSTM pipeline. This tuning process optimizes key hyperparameters (e.g., learning rates, epochs, batch sizes, latent dimension, and LSTM hidden size) to reduce overfitting and improve model generalization.
+   - **Shape Matching Fixes:** Training and evaluation routines have been updated to ensure that the LSTM’s scalar output and the target tensor have matching dimensions, eliminating broadcasting warnings.
+
+### Updated Training & Evaluation Instructions
+- **Training:**  
+  Run `main.py` to split the dataset into a training set and a holdout test set, perform grid search for the CNN+LSTM pipeline, train the final models using the tuned hyperparameters, and save the models.
+  ```bash
+  python main.py
+  python evaluate.py
+
 
 ## 🔧 Installation & Setup
 
@@ -118,19 +128,22 @@ DigitalTwinDragPrediction/
 │   │   ├── baseline_model.py
 │   │   ├── cnn_model.py
 │   │   └── lstm_model.py
-│   ├── utils/
-│   │   ├── csv_utils.py
-│   │   ├── image_utils.py
-│   │   └── data_loader.py
-│   └── train.py
-├── data/
-│   └── CFD snapshots (organized by Reynolds number)
+│   └── utils/
+│       ├── csv_utils.py
+│       ├── image_utils.py
+│       └── data_loader.py
+├── train.py         # Training routines for MLP, CNN, and LSTM (with grid search integration for CNN+LSTM)
+├── main.py          # Orchestrates data splitting, grid search for CNN+LSTM, and final model training
+├── evaluate.py      # Loads saved models and evaluates them on the final holdout test set
 ├── streamlit_app.py
 ├── api_server.py
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
 └── README.md
+
+
+
 ```
 
 ## 🚧 Future Roadmap
