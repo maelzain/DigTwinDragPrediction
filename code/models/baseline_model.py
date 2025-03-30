@@ -19,3 +19,7 @@ class BaselineMLP(nn.Module):
         x = x.view(batch_size, -1)
         out = self.model(x)
         return out
+
+
+
+
