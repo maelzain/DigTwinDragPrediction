@@ -57,7 +57,9 @@ def grid_search_cnn_lstm(train_dataset, config, device, folds=5):
         for key, value in zip(keys, combo):
             section, param = key.split('.')
             config[section][param] = value
-        
+        # Ensure that the LSTM input size matches the CNN latent dimension
+        config["lstm"]["input_size"] = config["cnn"]["latent_dim"]
+
         cv_losses = []
         for fold in range(folds):
             val_start = fold * fold_size
