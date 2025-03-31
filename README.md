@@ -1,126 +1,121 @@
 # Digital Twin for 2D Unsteady Flow Drag Prediction
 
 ## Overview
-This project introduces an advanced machine learning framework that integrates traditional Computational Fluid Dynamics (CFD) with deep learning methods to predict instantaneous drag forces on a sphere in 2D unsteady flow fields. The solution dramatically reduces simulation time and computational costs, enabling real-time analysis and design optimization.
+This project introduces an advanced machine learning framework that integrates traditional Computational Fluid Dynamics (CFD) with deep learning to predict instantaneous drag forces on a sphere in 2D unsteady flow fields. By combining state-of-the-art CNN-LSTM architecture with a containerized deployment strategy, this solution dramatically reduces simulation time from hours to seconds, enabling real-time analysis and design optimization.
 
 ## Key Features
-- **Advanced ML Models**: Implements both a baseline Multilayer Perceptron (MLP) and an optimized CNN-LSTM architecture for robust drag prediction
+- **Advanced ML Pipeline**: Implements both a baseline Multilayer Perceptron (MLP) and an optimized CNN-LSTM architecture that extracts spatial and temporal features from CFD snapshots
+- **High Prediction Accuracy**: Maintains >95% correlation with traditional CFD methods while reducing computation time by 65-75%
 - **Containerized Deployment**: Fully containerized with Docker and Docker Compose, ensuring consistency and scalability across environments
 - **Interactive Interfaces**: Features an intuitive Streamlit UI for real-time interaction and a Flask-based API for programmatic access
-- **Comprehensive Evaluation**: Provides detailed performance metrics and visualizations to validate model predictions against traditional CFD simulations
+- **Configurable Parameters**: All key parameters (image resolution, normalization settings, physical drag ranges) are defined in `config.yaml`, ensuring flexibility and reproducibility
 
-## Business Value: Precision-Driven Engineering Optimization
+## Business Value
 
-### Economic Impact and Cost Savings
+### Economic Impact & Efficiency Gains
 
-#### Computational Efficiency Gains
-- **Simulation Time Reduction**: Up to 65-75% decrease in computational processing time
-- **Energy Consumption Savings**: Estimated 40-50% reduction in high-performance computing (HPC) energy requirements
-- **Computational Cost Reduction**: Potential savings of $150,000 to $450,000 annually for mid-sized engineering departments
+- **Time Savings**:  
+  - Reduces simulation time from over 1 hour to mere seconds
+  - Accelerates design cycles by 40-60%
+  - Speeds up prototype iterations and evaluations by up to 65-75%
 
-#### Research and Development Benefits
-- **Prototype Iteration Speed**: Accelerates design cycles by 40-60%
-- **Predictive Accuracy**: Maintains >95% correlation with traditional CFD methods
-- **Cost per Simulation**: Reduces from approximately $5,000-$10,000 (traditional CFD) to $500-$1,500 per complex fluid dynamics analysis
+- **Cost Reduction**:  
+  - Estimated 40-50% reduction in high-performance computing energy requirements
+  - Lowers per-simulation costs from $5,000-$10,000 to $500-$1,500
+  - Potential savings of $150,000 to $450,000 annually for mid-sized engineering departments
 
-### Strategic Technological Advantages
+- **Enhanced Decision Making**:  
+  - Real-time, high-fidelity drag predictions
+  - Enables rapid evaluation of design alternatives
 
-#### Machine Learning Integration
-- **Predictive Capabilities**: Real-time drag force estimation with high-fidelity accuracy
-- **Adaptive Learning**: Continuous model improvement through incremental data ingestion
-- **Scalable Architecture**: Supports diverse engineering domain applications
+### Industry Applications
 
-### Industry-Specific Value Propositions
-
-#### Target Sectors
 1. **Aerospace Engineering**
    - Airframe design optimization
-   - Unmanned aerial vehicle (UAV) aerodynamic performance
+   - UAV aerodynamic performance
    - Potential fuel efficiency improvements: 3-7%
 
 2. **Automotive Industry**
    - Drag coefficient reduction
    - Electric vehicle range optimization
-   - Estimated design cycle time reduction: 45%
+   - Design cycle time reduction: ~45%
 
 3. **Renewable Energy**
    - Wind turbine blade design enhancement
    - Solar panel array aerodynamic configuration
-   - Potential energy capture improvement: 2-5%
+   - Energy capture improvement: 2-5%
 
-4. **Marine and Naval Architecture**
+4. **Marine Engineering**
    - Hull design efficiency
    - Propulsion system optimization
-   - Fuel consumption reduction potential: 6-12%
-
-### Technology Economic Metrics
-- **Initial Development Investment**: Estimated $75,000 - $150,000
-- **Projected ROI**: 200-350% within 24 months
-- **Break-Even Point**: Approximately 8-12 complex simulation projects
+   - Fuel consumption reduction: 6-12%
 
 ## Technical Approach
 
 ### Data Preprocessing
-- **Image Processing**: CFD snapshots are converted to 64×64 grayscale images
-- **Normalization**: Drag force values are normalized using MinMax scaling
-- **Data Splitting**: Dataset divided into 70% training, 10% validation, and 20% testing sets
+- CFD snapshots converted to 64×64 grayscale images
+- Drag force values normalized using MinMax scaling
+- Dataset divided into 70% training, 10% validation, and 20% testing sets
 
 ### Modeling Pipeline
 1. **Baseline Model**: Multilayer Perceptron (MLP) for initial drag force predictions
 2. **Optimized Model**:
    - **CNN**: Extracts spatial features from CFD snapshots
-   - **LSTM**: Captures temporal evolution of latent states from CNN outputs
-   - **Drag Prediction**: The combined CNN+LSTM pipeline outputs a single normalized drag value per input sample
-   - **Grid Search Hyperparameter Tuning**: Automated grid search with K-fold cross-validation optimizes key hyperparameters to reduce overfitting and improve model generalization
-   - **Shape Matching Fixes**: Updated training and evaluation routines ensure matching dimensions between LSTM's scalar output and target tensor
+   - **LSTM**: Captures temporal evolution of flow patterns
+   - **Grid Search**: Automated hyperparameter tuning with K-fold cross-validation
+   - **Output**: Single normalized drag value that can be converted to physical units
 
-### Training & Evaluation Instructions
-- **Training**:  
-  Run `main.py` to split the dataset, perform grid search for the CNN+LSTM pipeline, train the final models, and save the models.
-  ```bash
-  python main.py
-  python evaluate.py
-  ```
+## Quick Start
 
-## Installation & Setup
+### Deploy Using Docker
 
-### Prerequisites
-- Git
-- Docker & Docker Compose
-- Modern Web Browser
-
-### Quick Start
-
-#### Option A: Deploy Using Docker
 ```bash
+# Clone the repository
 git clone https://github.com/maelzain/DigTwinDragPrediction.git
 cd DigTwinDragPrediction
+
+# Build and run containers
 docker-compose up --build
 ```
 
-Access services:
+Services will be accessible at:
 - **Streamlit UI**: http://localhost:8501
 - **API**: http://localhost:5000
 
-#### Option B: Run Locally
+### Run Locally
+
 ```bash
+# Install dependencies
 pip install -r requirements.txt
-streamlit run streamlit_app.py
+
+# Terminal 1: Start the Flask API
+python api_server.py
+
+# Terminal 2: Start the Streamlit UI
+streamlit run streamlit_app.py --server.port=8501 --server.address=0.0.0.0
 ```
 
-## Testing & Evaluation
+## Training & Evaluation
 
-### API Testing
-- Convert contour plot image to base64 string
-- Send POST request to `/predict_drag` endpoint
-
-### Model Evaluation
 ```bash
-python train.py
+# Split dataset, train models, and save results
+python main.py
+
+# Evaluate models on test dataset
 python evaluate.py
 ```
 
+## API Testing
+
+```bash
+# Test API endpoints interactively
+python test_api.py
+```
+
+The script will guide you through selecting an image, model type, Reynolds number group, and send a request to the API. The response includes the predicted drag in physical units.
+
 ## Project Structure
+
 ```
 DigitalTwinDragPrediction/
 ├── code/
@@ -132,36 +127,51 @@ DigitalTwinDragPrediction/
 │       ├── csv_utils.py
 │       ├── image_utils.py
 │       └── data_loader.py
-├── train.py         # Training routines for MLP, CNN, and LSTM (with grid search integration)
-├── main.py          # Orchestrates data splitting, grid search, and final model training
-├── evaluate.py      # Loads saved models and evaluates them on the holdout test set
-├── streamlit_app.py
-├── api_server.py
+├── api_server.py         # Flask API for drag prediction
+├── train.py              # Training routines (includes grid search integration)
+├── main.py               # Orchestrates data splitting and model training
+├── evaluate.py           # Evaluates saved models on test dataset
+├── streamlit_app.py      # Interactive UI using Streamlit
+├── test_api.py           # Script for testing API endpoints
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
+├── config.yaml           # Configuration parameters
 └── README.md
 ```
 
 ## Future Roadmap
-- Extend framework to 3D flow fields
-- Integrate real-time sensor data
-- Develop advanced MLOps pipelines
-- Enhance visualization dashboards
+
+- Extend the framework to 3D flow fields and complex geometries
+- Integrate real-time sensor data for adaptive model retraining
+- Develop advanced MLOps pipelines for CI/CD
+- Enhance visualization dashboards with detailed error analysis
+- Implement transfer learning for cross-domain applications
+
+## ROI Analysis
+
+- **Initial Investment**: $75,000 - $150,000
+- **Projected ROI**: 200-350% within 24 months
+- **Break-Even Point**: Approximately 8-12 complex simulation projects
 
 ## Contributing
-Contributions are welcome! To contribute:
-- Open an issue for discussion
-- Submit a pull request
-- Follow established coding standards
+
+Contributions are welcome! Please:
+1. Open an issue to discuss proposed changes
+2. Submit a pull request
+3. Follow established coding standards
+4. Ensure all changes are documented
 
 ## Contact
+
 **Mahdi ELzain**
 - **Email**: mahdielzain@outlook.com
 - **GitHub**: [@maelzain](https://github.com/maelzain)
 
-## License
-AUB
-
 ## Acknowledgments
-Special thanks to Dr. Ammar Mohanna for valuable guidance and support.
+
+Special thanks to Dr. Ammar Mohanna for valuable guidance and support throughout this project.
+
+## License
+
+This project is licensed under AUB terms.
