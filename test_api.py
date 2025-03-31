@@ -189,7 +189,7 @@ def main() -> None:
     display_summary(payload)
     
     # Confirm before sending
-    console.print("\nReady to send API request. Continue? [y/N]: ", end="")
+    print("\nReady to send API request. Continue? [y/N]: ", end="")
     confirm = input().lower()
     if confirm not in ["y", "yes"]:
         console.print("[yellow]Operation cancelled by user.[/]")
