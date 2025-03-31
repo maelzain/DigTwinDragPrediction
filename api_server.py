@@ -25,30 +25,32 @@ app = Flask(__name__)
 CORS(app)
 
 def load_configuration(config_path="config.yaml"):
-    """Load configuration and set defaults."""
+    """Load configuration from config.yaml and set minimal defaults."""
     try:
         with open(config_path, "r") as f:
             cfg = yaml.safe_load(f)
         cfg.setdefault("device", "cpu")
-        cfg.setdefault("cnn", {"latent_dim": 128})
+        cfg.setdefault("resize", [64, 64])
         return cfg
     except Exception as e:
         logger.error(f"Failed to load configuration from {config_path}: {e}")
-        return {"device": "cpu", "cnn": {"latent_dim": 128}}
+        return {"device": "cpu", "resize": [64, 64]}
 
 config = load_configuration()
 device = torch.device(config.get("device", "cpu"))
 
 def load_model(model_type="cnn"):
-    """Load and return the specified model."""
+    """Load and return the specified model using parameters from config."""
     try:
         if model_type == "cnn":
-            latent_dim = config["cnn"].get("latent_dim", 128)
+            latent_dim = config["cnn"]["latent_dim"]
             model = CNNDragPredictor(latent_dim=latent_dim).to(device)
-            model_path = os.path.join("models", "cnn_drag_predictor.pth")
+            model_path = os.path.join(config["model_dir"], "cnn_drag_predictor.pth")
         else:
-            model = BaselineMLP(input_dim=64*64, hidden_dim=128).to(device)
-            model_path = os.path.join("models", "baseline_mlp.pth")
+            input_dim = config["resize"][0] * config["resize"][1]
+            hidden_dim = config["baseline"]["hidden_dim"]
+            model = BaselineMLP(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
+            model_path = os.path.join(config["model_dir"], "baseline_mlp.pth")
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
         logger.info(f"{model_type.upper()} model loaded from {model_path}.")
@@ -62,7 +64,7 @@ cnn_model = load_model("cnn")
 mlp_model = load_model("mlp")
 
 def is_valid_contour_image(filename, image):
-    """Validate the uploaded image based on filename keywords and image contrast."""
+    """Validate the image using benchmark criteria."""
     expected_keywords = ["timestep", "re", "contour", "velocity"]
     if not any(keyword in filename.lower() for keyword in expected_keywords):
         logger.warning(f"Filename '{filename}' lacks expected keywords.")
@@ -83,7 +85,7 @@ def index():
     }), 200
 
 @app.route("/predict_drag", methods=["POST"])
-def predict_drag():
+def predict_drag_endpoint():
     """Predict drag from an uploaded contour image."""
     data = request.get_json(force=True)
     required_fields = ["image", "filename", "model_type", "reynolds_group"]
@@ -97,7 +99,8 @@ def predict_drag():
         if len(b64_string) % 4:
             b64_string += "=" * (4 - len(b64_string) % 4)
         img_data = base64.b64decode(b64_string)
-        image = Image.open(io.BytesIO(img_data)).convert("L").resize((64, 64))
+        resize_dims = tuple(config["resize"])
+        image = Image.open(io.BytesIO(img_data)).convert("L").resize(resize_dims)
     except Exception as e:
         logger.error(f"Image decoding error: {e}")
         return jsonify({"error": "Invalid image data"}), 400
@@ -109,14 +112,6 @@ def predict_drag():
     model_type = data["model_type"].lower()
     reynolds_group = data["reynolds_group"]
 
-    # Drag prediction normalization ranges for different Reynolds groups.
-    drag_ranges = {
-        "re37": (3.26926e-07, 3.33207e-07),
-        "re75": (1.01e-06, 1.04e-06),
-        "re150": (3.15e-06, 0.000130279),
-        "re300": (1.4e-05, 1.6e-05)
-    }
-
     try:
         model = cnn_model if model_type == "cnn" else mlp_model
         transform = transforms.Compose([transforms.ToTensor()])
@@ -125,6 +120,8 @@ def predict_drag():
             output = model(img_tensor)
             drag_pred = output[1] if isinstance(output, tuple) else output
 
+        # Use drag_ranges from config
+        drag_ranges = config.get("drag_ranges", {})
         if reynolds_group in drag_ranges:
             drag_min, drag_max = drag_ranges[reynolds_group]
             predicted_drag = drag_pred.item() * (drag_max - drag_min) + drag_min
@@ -142,4 +139,4 @@ def predict_drag():
         return jsonify({"error": "Prediction failed"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=config.get("api_port", 5000), debug=False)

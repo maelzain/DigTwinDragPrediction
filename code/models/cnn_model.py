@@ -4,12 +4,13 @@ import torch.nn as nn
 class CNNDragPredictor(nn.Module):
     """
     CNN-based model for drag prediction.
-    The network compresses a 64x64 grayscale image into a latent vector via convolutional layers,
+    Compresses a 64x64 grayscale image into a latent vector via convolutional layers,
     then predicts drag using a fully-connected head.
+    
+    All key hyperparameters (e.g., latent_dim) must be provided upon instantiation.
     """
-    def __init__(self, latent_dim=128):
+    def __init__(self, latent_dim):
         super(CNNDragPredictor, self).__init__()
-        # Encoder: three convolutional blocks
         self.conv1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(32),
@@ -26,9 +27,8 @@ class CNNDragPredictor(nn.Module):
             nn.ReLU(inplace=True)
         )
         self.flatten = nn.Flatten()
+        # 64x64 input -> conv layers produce 8x8 feature map with 128 channels.
         self.fc = nn.Linear(128 * 8 * 8, latent_dim)
-        
-        # Drag prediction head
         self.drag_head = nn.Sequential(
             nn.Linear(latent_dim, latent_dim // 2),
             nn.ReLU(inplace=True),

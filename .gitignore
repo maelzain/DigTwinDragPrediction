@@ -1,0 +1,19 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs and output files
+*.log
+logs/
+evaluation_plots/
+
+# Data files (if they are large or meant to be kept locally)
+data/
+
+# Model checkpoints for specific Reynolds groups (if these are experimental)
+models/*_re*.pth
+models/lstm_drag_ensemble_*.pth
+
+# Wheels and distribution packages
+wheels/

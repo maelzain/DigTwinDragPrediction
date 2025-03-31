@@ -1,35 +1,56 @@
 # Configuration for Digital Twin for 2D Unsteady Flow Drag Prediction
 
+# Paths and Directories
 data_dir: "C:\\Users\\user\\Desktop\\COURSES\\AUB\\Spring 2024-2025-739988\\introduction to machine learning\\project 01\\GItHub\\project\\data"
-reynolds: [37, 75, 150, 300]
+model_dir: "models"
+
+# Device configuration
+device: "cpu"         # Use "cuda" if available
+api_port: 5000
+
+# Image processing settings
 resize: [64, 64]
 augment: true
-device: "cpu"
-drag_normalization: "minmax"  # Scale drag values between 0 and 1 using minmax scaling
+image_mean: 0.45             # Dataset-wide mean for image normalization
+image_std: 0.22              # Dataset-wide standard deviation for image normalization
+
+# Reynolds groups for prediction
+reynolds: [37, 75, 150, 300]
+
+# Drag normalization method (e.g., minmax scaling)
+drag_normalization: "minmax"
+
+# Drag Ranges for physical units 
+drag_ranges:
+  re37: [3.26926e-07, 3.33207e-07]
+  re75: [1.01e-06, 1.04e-06]
+  re150: [3.15e-06, 0.000130279]
+  re300: [1.4e-05, 1.6e-05]
 
 # Baseline Model Configuration
 baseline:
   learning_rate: 0.0005
   epochs: 100
   batch_size: 64
+  hidden_dim: 128
 
 # CNN Configuration
 cnn:
-  latent_dim: 128
+  latent_dim: 256
   learning_rate: 0.0005
-  epochs: 50
+  epochs: 30
   batch_size: 20
 
 # LSTM Configuration (with Physics-Informed Loss)
 lstm:
-  input_size: 128        # Must match CNN latent_dim
+  input_size: 256        # Must match cnn.latent_dim
   hidden_size: 64
   num_layers: 1
   output_size: 1
-  epochs: 100
+  epochs: 50
   learning_rate: 0.0005
   physics_loss_weight: 0.005
-  batch_size: 64
+  batch_size: 32
 
 # Data Splitting Configuration
 split:
@@ -42,7 +63,7 @@ robust_evaluation:
   folds: 5
 
 # Flag for Grid Search Hyperparameter Tuning for CNN+LSTM pipeline
-grid_search: true
+grid_search: false
 
 # Flag for interactive plots in UI
 show_interactive: true

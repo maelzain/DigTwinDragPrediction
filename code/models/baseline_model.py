@@ -6,7 +6,7 @@ class BaselineMLP(nn.Module):
     Baseline MLP model for drag prediction.
     Flattens the input (assumed 64x64 grayscale) and predicts a drag value.
     """
-    def __init__(self, input_dim=64*64, hidden_dim=128):
+    def __init__(self, input_dim, hidden_dim):
         super(BaselineMLP, self).__init__()
         self.model = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
@@ -19,7 +19,3 @@ class BaselineMLP(nn.Module):
         x = x.view(batch_size, -1)
         out = self.model(x)
         return out
-
-
-
-

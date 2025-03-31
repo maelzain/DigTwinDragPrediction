@@ -1,27 +1,79 @@
 import os
 import logging
 import torch
+import pandas as pd
+import numpy as np
 from torch.utils.data import TensorDataset
-from code.utils.image_utils import load_and_preprocess_images
-from code.utils.csv_utils import preprocess_drag_csv
+from PIL import Image
+from torchvision import transforms
+from code.utils.csv_utils import normalize_drag_forces
 
 class ReynoldsDataLoader:
     """
-    Loads and preprocesses the dataset for multiple Reynolds experiments.
-    Combines images and corresponding drag CSV data.
+    Enhanced data loader for Reynolds experiments.
+    Reads raw images and CSV files from each Reynolds folder,
+    applies preprocessing (grayscale conversion, resizing, augmentation),
+    and normalizes drag forces.
     """
     def __init__(self, config):
+        self.config = config
         self.data_dir = config["data_dir"]
         self.reynolds = config["reynolds"]
         self.resize = config.get("resize", [64, 64])
         self.augment = config.get("augment", False)
         self.drag_normalization = config.get("drag_normalization", "minmax")
+    
+    def load_images(self, folder_path):
+        image_list = []
+        orig_shapes = []
+        filenames = []
+        valid_exts = (".png", ".jpg", ".jpeg")
+        transform_list = [
+            transforms.Resize(tuple(self.resize)),
+            transforms.ToTensor()
+        ]
+        if self.augment:
+            transform_list.insert(0, transforms.RandomHorizontalFlip())
+        transform_list.append(transforms.Normalize(
+            mean=[self.config.get("image_mean", 0.45)],
+            std=[self.config.get("image_std", 0.22)]
+        ))
+        transform = transforms.Compose(transform_list)
+        
+        files = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(valid_exts)])
+        if not files:
+            logging.error(f"No valid image files found in {folder_path}.")
+        for f in files:
+            img_path = os.path.join(folder_path, f)
+            try:
+                with Image.open(img_path) as img:
+                    img = img.convert("L")
+                    orig_shapes.append(img.size)
+                    img_tensor = transform(img)
+                    image_list.append(img_tensor)
+                    filenames.append(f)
+            except Exception as e:
+                logging.error(f"Error processing image {img_path}: {e}")
+        if image_list:
+            images_tensor = torch.stack(image_list)
+        else:
+            images_tensor = torch.empty(0)
+        return images_tensor, orig_shapes, filenames
+
+    def load_csv(self, csv_path):
+        if not os.path.exists(csv_path):
+            logging.error(f"CSV file not found: {csv_path}")
+            return None
+        try:
+            df = pd.read_csv(csv_path)
+            logging.info(f"Loaded CSV file: {csv_path}, shape: {df.shape}")
+            df = normalize_drag_forces(df, column_name="cd", method=self.drag_normalization)
+            return df
+        except Exception as e:
+            logging.error(f"Error loading CSV file {csv_path}: {e}")
+            return None
 
     def load_dataset(self):
-        """
-        Iterates through each Reynolds folder, loads images and drag data,
-        and returns a dictionary with keys corresponding to each folder.
-        """
         dataset = {}
         for re_val in self.reynolds:
             folder = f"re{re_val}"
@@ -29,29 +81,22 @@ class ReynoldsDataLoader:
             if not os.path.isdir(folder_path):
                 logging.warning(f"Folder {folder_path} does not exist. Skipping.")
                 continue
-            images, orig_shapes, filenames = load_and_preprocess_images(
-                folder_path, resize=self.resize, augment=self.augment
-            )
+            images, orig_shapes, filenames = self.load_images(folder_path)
             csv_filename = f"{folder}.csv"
             csv_path = os.path.join(folder_path, csv_filename)
-            drag_data = preprocess_drag_csv(csv_path, column_name="cd", norm_method=self.drag_normalization)
-            if drag_data is not None:
+            drag_df = self.load_csv(csv_path)
+            if drag_df is not None:
                 try:
-                    drag_tensor = torch.tensor(
-                        drag_data["cd"].astype(float).values, dtype=torch.float32
-                    ).unsqueeze(1)
+                    drag_tensor = torch.tensor(drag_df["cd"].astype(float).values, dtype=torch.float32).unsqueeze(1)
                 except Exception as e:
                     logging.error(f"Error converting drag data for folder {folder}: {e}")
                     drag_tensor = None
             else:
                 drag_tensor = None
 
-            # Ensure the number of images and drag values match
             if images is not None and images.numel() > 0 and drag_tensor is not None:
                 if images.shape[0] != drag_tensor.shape[0]:
-                    logging.warning(
-                        f"Size mismatch in folder {folder}: images={images.shape[0]} vs drag={drag_tensor.shape[0]}. Trimming to min count."
-                    )
+                    logging.warning(f"Size mismatch in folder {folder}: images={images.shape[0]} vs drag={drag_tensor.shape[0]}. Trimming to minimum count.")
                     min_count = min(images.shape[0], drag_tensor.shape[0])
                     images = images[:min_count]
                     drag_tensor = drag_tensor[:min_count]
@@ -65,20 +110,3 @@ class ReynoldsDataLoader:
             if images.numel() > 0 and drag_tensor is not None:
                 logging.info(f"Folder {folder}: images shape {images.shape}, drag shape {drag_tensor.shape}")
         return dataset
-
-    def extract_times(self, filenames):
-        """
-        Extracts time values from filenames that follow the format "timestep_XXXX.png".
-        Returns a list of float time values.
-        """
-        times = []
-        for name in filenames:
-            try:
-                base = os.path.splitext(name)[0]
-                parts = base.split("_")
-                time_val = float(parts[1])
-                times.append(time_val)
-            except Exception as e:
-                logging.error(f"Error extracting time from filename {name}: {e}")
-                continue
-        return times if times else None

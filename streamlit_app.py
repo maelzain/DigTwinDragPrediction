@@ -17,6 +17,7 @@ def load_config():
         return yaml.safe_load(f)
 
 def is_valid_contour_image(filename, image):
+    """Validate image using benchmark criteria."""
     expected_keywords = ["timestep", "re", "contour"]
     if not any(keyword in filename.lower() for keyword in expected_keywords):
         st.error("Filename must include keywords like 'timestep', 're', or 'contour'.")
@@ -28,6 +29,7 @@ def is_valid_contour_image(filename, image):
     return True
 
 def predict_drag(model, image, device):
+    """Predict drag using a minimal transform (only ToTensor) as in the benchmark."""
     transform = transforms.Compose([transforms.ToTensor()])
     img_tensor = transform(image).unsqueeze(0).to(device)
     with torch.no_grad():
@@ -48,18 +50,21 @@ def main():
     Traditional CFD simulations can take around 1 hour with significant computational cost.
     Our solution delivers predictions in seconds—saving you time and money.
     """)
-
+    
     config = load_config()
-    device = config.get("device", "cpu")
+    device = torch.device(config.get("device", "cpu"))
     model_choice = st.selectbox("Select Prediction Model", ["Optimized CNN", "Baseline MLP"], key="model_choice")
     reynolds_group = st.selectbox("Select Reynolds Group", ["re37", "re75", "re150", "re300"], key="reynolds_group")
     
     if model_choice == "Optimized CNN":
-        model_path = os.path.join("models", "cnn_drag_predictor.pth")
-        model = CNNDragPredictor(latent_dim=config["cnn"].get("latent_dim", 128)).to(device)
+        model_path = os.path.join(config["model_dir"], "cnn_drag_predictor.pth")
+        latent_dim = config["cnn"]["latent_dim"]
+        model = CNNDragPredictor(latent_dim=latent_dim).to(device)
     else:
-        model_path = os.path.join("models", "baseline_mlp.pth")
-        model = BaselineMLP(input_dim=64*64, hidden_dim=128).to(device)
+        model_path = os.path.join(config["model_dir"], "baseline_mlp.pth")
+        input_dim = config["resize"][0] * config["resize"][1]
+        hidden_dim = config["baseline"]["hidden_dim"]
+        model = BaselineMLP(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
     
     try:
         model.load_state_dict(torch.load(model_path, map_location=device))
@@ -72,7 +77,8 @@ def main():
     uploaded_file = st.file_uploader("Upload a contour plot image...", type=["png", "jpg", "jpeg"], key="uploaded_file")
     if uploaded_file is not None:
         try:
-            image = Image.open(uploaded_file).convert("L").resize((64, 64))
+            resize_dims = tuple(config["resize"])
+            image = Image.open(uploaded_file).convert("L").resize(resize_dims)
         except Exception as e:
             st.error(f"Error loading image: {e}")
             return
@@ -103,12 +109,8 @@ def main():
         drag_norm = predict_drag(model, image, device)
         inference_time = time.time() - start_time
         
-        drag_ranges = {
-            "re37": (3.26926e-07, 3.33207e-07),
-            "re75": (1.01e-06, 1.04e-06),
-            "re150": (3.15e-06, 0.000130279),
-            "re300": (1.4e-05, 1.6e-05)
-        }
+        # Reverse normalization calculation using drag_ranges from config
+        drag_ranges = config.get("drag_ranges", {})
         if reynolds_group in drag_ranges:
             drag_min, drag_max = drag_ranges[reynolds_group]
             predicted_drag = drag_norm * (drag_max - drag_min) + drag_min
@@ -118,20 +120,18 @@ def main():
         st.markdown(f"**Predicted Drag ({model_choice}):** {predicted_drag:.8f} (physical units)")
         st.markdown(f"**Inference Time:** {inference_time:.3f} seconds")
         
-        typical_simulation_time = 3600  # seconds
-        typical_simulation_cost = 50.0    # dollars per simulation
+        typical_simulation_time = 3600  # seconds (example)
+        typical_simulation_cost = 50.0    # dollars per simulation (example)
         time_saved = typical_simulation_time - inference_time
         percent_time_saved = (time_saved / typical_simulation_time) * 100
         
         st.markdown(f"**Time Saved:** {time_saved:.1f} seconds ({percent_time_saved:.2f}% reduction compared to a traditional CFD simulation)")
         st.markdown(f"**Estimated Cost Savings:** Approximately ${typical_simulation_cost:.2f} saved per simulation by using the ML model.")
-        st.markdown("For more details on simulation performance and cost benchmarks, refer to the [SciTASIC Cluster Report](https://www.epfl.ch/campus/services/wp-content/uploads/2019/05/SCITASIC-CLUSTER_2018.pdf) and supplementary pricing data.")
+        st.markdown("For more details on simulation performance and cost benchmarks, refer to the [SciTASIC Cluster Report](https://www.epfl.ch/campus/services/wp-content/uploads/2019/05/SCITASIC-CLUSTER_2018.pdf).")
         
         st.markdown("---")
         st.markdown("### Additional Evaluation Visualizations")
-        st.markdown("Download evaluation plots or review detailed error analyses from our robust evaluation module below.")
-        
-        eval_plot_path = os.path.join("evaluation_plots", "cnn_lstm_final_comparison.png")
+        eval_plot_path = os.path.join("evaluation_plots", "CNN+LSTM_test_vs_true.png")
         if os.path.exists(eval_plot_path):
             with open(eval_plot_path, "rb") as file:
                 st.download_button(
@@ -142,6 +142,6 @@ def main():
                 )
         else:
             st.info("Evaluation plot not available. Run the evaluation script to generate plots.")
-
+            
 if __name__ == "__main__":
     main()

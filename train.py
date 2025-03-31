@@ -5,23 +5,21 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 
-# Import your model classes (ensure the paths below match your project structure)
 from code.models.baseline_model import BaselineMLP
 from code.models.cnn_model import CNNDragPredictor
 from code.models.lstm_model import LSTMDragPredictor
 
 def train_baseline_model(train_dataset, config, device="cpu"):
-    """
-    Train the Baseline MLP model using the specified hyperparameters.
-    """
-    batch_size = config["baseline"].get("batch_size", 64)
-    lr = config["baseline"].get("learning_rate", 0.0005)
-    epochs = config["baseline"].get("epochs", 100)
-    
+    batch_size = config["baseline"]["batch_size"]
+    lr = config["baseline"]["learning_rate"]
+    epochs = config["baseline"]["epochs"]
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    sample_image, _ = train_dataset[0]
-    input_dim = sample_image.numel()
-    model = BaselineMLP(input_dim=input_dim, hidden_dim=128).to(device)
+    # Compute input_dim from config["resize"]
+    resize_dims = config["resize"]
+    input_dim = resize_dims[0] * resize_dims[1]
+    hidden_dim = config["baseline"]["hidden_dim"]
+    model = BaselineMLP(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
@@ -43,14 +41,11 @@ def train_baseline_model(train_dataset, config, device="cpu"):
     return model
 
 def train_cnn_model(train_dataset, config, device="cpu"):
-    """
-    Train the CNN model.
-    """
-    batch_size = config["cnn"].get("batch_size", 256)
-    lr = config["cnn"].get("learning_rate", 0.0005)
-    epochs = config["cnn"].get("epochs", 150)
-    latent_dim = config["cnn"].get("latent_dim", 128)
-    
+    batch_size = config["cnn"]["batch_size"]
+    lr = config["cnn"]["learning_rate"]
+    epochs = config["cnn"]["epochs"]
+    latent_dim = config["cnn"]["latent_dim"]
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     model = CNNDragPredictor(latent_dim=latent_dim).to(device)
     criterion = nn.MSELoss()
@@ -74,18 +69,14 @@ def train_cnn_model(train_dataset, config, device="cpu"):
     return model
 
 def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
-    """
-    Train the LSTM model to evolve CNN latent vectors over time with a physics-informed loss.
-    """
-    lstm_epochs = config["lstm"].get("epochs", 100)
-    lstm_lr = config["lstm"].get("learning_rate", 0.0005)
-    physics_loss_weight = config["lstm"].get("physics_loss_weight", 0.005)
-    input_size = config["lstm"].get("input_size", 128)
-    hidden_size = config["lstm"].get("hidden_size", 64)
-    num_layers = config["lstm"].get("num_layers", 1)
-    output_size = config["lstm"].get("output_size", 1)
-    
-    # Extract latent features using the pretrained CNN
+    lstm_epochs = config["lstm"]["epochs"]
+    lstm_lr = config["lstm"]["learning_rate"]
+    physics_loss_weight = config["lstm"]["physics_loss_weight"]
+    input_size = config["lstm"]["input_size"]
+    hidden_size = config["lstm"]["hidden_size"]
+    num_layers = config["lstm"]["num_layers"]
+    output_size = config["lstm"]["output_size"]
+
     cnn_model.eval()
     latents = []
     with torch.no_grad():
@@ -93,17 +84,13 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
             x, _ = train_dataset[i]
             latent, _ = cnn_model(x.unsqueeze(0).to(device))
             latents.append(latent.cpu())
-    latents = torch.cat(latents, dim=0)  # Shape: (N, latent_dim)
-    
-    # Prepare dataset for LSTM training
+    latents = torch.cat(latents, dim=0)
     labels = torch.cat([y for _, y in train_dataset], dim=0)
     dataset = TensorDataset(latents, labels)
-    batch_size = config["lstm"].get("batch_size", 64)
+    batch_size = config["lstm"]["batch_size"]
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    
     # Reshape latent features for LSTM: (seq_len, batch, input_size)
     latents_all = latents.unsqueeze(1)
-    
     lstm_model = LSTMDragPredictor(
         input_size=input_size,
         hidden_size=hidden_size,
@@ -112,20 +99,19 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
     ).to(device)
     criterion = nn.MSELoss()
     optimizer = optim.Adam(lstm_model.parameters(), lr=lstm_lr)
-    
+
     logging.info(f"Training LSTM for {lstm_epochs} epochs on {device}")
     lstm_model.train()
     for epoch in range(1, lstm_epochs + 1):
         optimizer.zero_grad()
-        pred_seq, _ = lstm_model(latents_all)  # Expected shape: (seq_len, 1, 1)
-        pred_seq = pred_seq.squeeze()           # Potentially a 0-dim tensor if only one sample is present
+        pred_seq, _ = lstm_model(latents_all)
+        pred_seq = pred_seq.squeeze()
         if pred_seq.dim() == 0:
             pred_seq = pred_seq.unsqueeze(0)
         target = labels.squeeze()
         if target.dim() == 0:
             target = target.unsqueeze(0)
         mse_loss = criterion(pred_seq, target)
-        # Physics-informed loss for smooth predictions
         if pred_seq.size(0) > 1:
             diff_pred = pred_seq[1:] - pred_seq[:-1]
             physics_loss = torch.mean(diff_pred ** 2)
@@ -141,3 +127,7 @@ def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
                 f"Total: {total_loss.item():.6f}"
             )
     return lstm_model
+
+if __name__ == "__main__":
+    # Typically invoked via main.py
+    pass

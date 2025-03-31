@@ -5,20 +5,10 @@ import torch
 from torchvision import transforms
 
 def load_and_preprocess_images(folder_path, resize=[64, 64], augment=False):
-    """
-    Loads all valid image files in a folder, converts them to grayscale,
-    resizes them, applies optional augmentation, and converts to PyTorch tensors.
-    
-    Returns:
-      - images_tensor: Stacked tensor of images.
-      - orig_shapes: List of original image sizes.
-      - filenames: List of image filenames.
-    """
     image_list = []
     orig_shapes = []
     filenames = []
-    # Compose transformation pipeline
-    transform_list = [transforms.Resize(resize), transforms.ToTensor()]
+    transform_list = [transforms.Resize(tuple(resize)), transforms.ToTensor()]
     if augment:
         transform_list.insert(0, transforms.RandomHorizontalFlip())
     transform = transforms.Compose(transform_list)
