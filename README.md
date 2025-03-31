@@ -74,6 +74,9 @@ This project introduces an advanced machine learning framework that integrates t
 git clone https://github.com/maelzain/DigTwinDragPrediction.git
 cd DigTwinDragPrediction
 
+run streamlit :streamlit run streamlit_app.py
+run api: python test_api.py
+
 # Build and run containers
 docker-compose up --build
 ```
