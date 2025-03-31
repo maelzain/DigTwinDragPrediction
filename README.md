@@ -78,7 +78,9 @@ step 2:
 # Build and run containers
 docker-compose up --build
 
+
 to stop: docker-compose down
+to rerun:docker-compose up
 
 step 3:
 run streamlit :streamlit run streamlit_app.py
