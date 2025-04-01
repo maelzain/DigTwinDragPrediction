@@ -47,10 +47,10 @@ lstm:
   hidden_size: 64
   num_layers: 1
   output_size: 1
-  epochs: 50
+  epochs: 100
   learning_rate: 0.0005
   physics_loss_weight: 0.005
-  batch_size: 32
+  batch_size: 64
 
 # Data Splitting Configuration
 split:

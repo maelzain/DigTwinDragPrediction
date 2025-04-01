@@ -139,7 +139,7 @@ DigitalTwinDragPrediction/
 │       ├── image_utils.py
 │       └── data_loader.py
 ├── api_server.py         # Flask API for drag prediction
-├── train.py              # Training routines (includes grid search integration)
+├── train.py              # Training routines (includes grid search integration)  
 ├── main.py               # Orchestrates data splitting and model training
 ├── evaluate.py           # Evaluates saved models on test dataset
 ├── streamlit_app.py      # Interactive UI using Streamlit
@@ -149,6 +149,8 @@ DigitalTwinDragPrediction/
 ├── requirements.txt
 ├── config.yaml           # Configuration parameters
 └── README.md
+
+Best CNN+LSTM hyperparameters BY Grid search method: {'cnn.learning_rate': 0.0005, 'cnn.epochs': 30, 'cnn.batch_size': 20, 'cnn.latent_dim': 256, 'lstm.learning_rate': 0.0005, 'lstm.epochs': 100, 'lstm.batch_size': 64, 'lstm.hidden_size': 64}
 ```
 
 ## Future Roadmap
