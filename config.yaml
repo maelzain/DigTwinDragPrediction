@@ -17,7 +17,7 @@ image_std: 0.22              # Dataset-wide standard deviation for image normali
 # Reynolds groups for prediction
 reynolds: [37, 75, 150, 300]
 
-# Drag normalization method (e.g., minmax scaling)
+# Drag normalization method (e.g., minmax scaling,standarscalat,...)
 drag_normalization: "minmax"
 
 # Drag Ranges for physical units 
@@ -44,26 +44,39 @@ cnn:
 # LSTM Configuration (with Physics-Informed Loss)
 lstm:
   input_size: 256        # Must match cnn.latent_dim
-  hidden_size: 64
+  hidden_size: 128
   num_layers: 1
   output_size: 1
-  epochs: 100
+  epochs: 50
   learning_rate: 0.0005
   physics_loss_weight: 0.005
   batch_size: 64
 
 # Data Splitting Configuration
 split:
-  train_ratio: 0.8
-  test_ratio: 0.2
-  eval_ratio: 0
+  train_ratio: 0.7     # Modified: reduced from 0.8 to accommodate validation set
+  test_ratio: 0.2      # Test set ratio remains the same
+  eval_ratio: 0.1      # Modified: increased from 0 to create validation set for final model evaluation
 
-# Robust Evaluation Settings (K-Fold)
-robust_evaluation:
-  folds: 5
+# Hyperparameter Tuning Configuration
+hyperparameter_tuning:
+  grid_search: false    # Enable grid search for hyperparameter tuning
+  folds: 5             # Number of folds for cross-validation
+  # Parameter grid for CNN
+  cnn_param_grid:
+    #learning_rate: [0.0001, 0.0005]   # no need to make to make a grid search for learning rate as per of some experiments and also as per of Dr. Ammar Mohanna 
+    epochs: [30, 50]
+   # batch_size: [10, 20]              # no need to make to make a grid search for batch size as per of some experiments and also as per of Dr. Ammar Mohanna  
+    latent_dim: [128, 256]
+  # Parameter grid for LSTM
+  lstm_param_grid:
+    #learning_rate: [0.0001, 0.0005]   # no need to make to make a grid search for learning rate as per of some experiments and also as per of Dr. Ammar Mohanna
+    epochs: [50, 100]
+    #batch_size: [32, 64]               # no need to make to make a grid search for batch size as per of some experiments and also as per of Dr. Ammar Mohanna
+    hidden_size: [64, 128]
 
 # Flag for Grid Search Hyperparameter Tuning for CNN+LSTM pipeline
-grid_search: false
+grid_search: false      # Modified: enabled grid search
 
 # Flag for interactive plots in UI
 show_interactive: true

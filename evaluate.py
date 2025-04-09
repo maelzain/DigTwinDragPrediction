@@ -4,7 +4,7 @@ import yaml
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from torch.utils.data import random_split, TensorDataset
+from torch.utils.data import random_split, TensorDataset, DataLoader
 from scipy import stats
 
 from code.utils.data_loader import ReynoldsDataLoader
@@ -12,19 +12,28 @@ from code.models.baseline_model import BaselineMLP
 from code.models.cnn_model import CNNDragPredictor
 from code.models.lstm_model import LSTMDragPredictor
 
-def compute_regression_metrics(y_true, y_pred):
+
+def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray):
+    """
+    Compute regression metrics: MSE, RMSE, and R².
+    """
     mse = np.mean((y_true - y_pred) ** 2)
     rmse = np.sqrt(mse)
     var = np.var(y_true)
     r2 = 1 - mse / var if var != 0 else float("nan")
     return mse, rmse, r2
 
-def compute_bias_variance(y_true, y_pred):
+
+def compute_bias_variance(y_true: np.ndarray, y_pred: np.ndarray):
+    """
+    Compute bias and variance of predictions.
+    """
     bias = np.mean(y_pred - y_true)
     variance = np.var(y_pred)
     return bias, variance
 
-def plot_true_vs_pred(y_true, y_pred, model_name="CNN+LSTM"):
+
+def plot_true_vs_pred(y_true, y_pred, model_name="CNN followed by LSTM"):
     plt.figure(figsize=(10, 6))
     plt.scatter(y_true, y_pred, alpha=0.7, label=model_name)
     plt.plot([min(y_true), max(y_true)], [min(y_true), max(y_true)], 'r--', label="Ideal Fit")
@@ -38,6 +47,7 @@ def plot_true_vs_pred(y_true, y_pred, model_name="CNN+LSTM"):
     plt.savefig(scatter_path)
     plt.close()
     logging.info(f"Saved true vs. predicted scatter plot: {scatter_path}")
+
 
 def plot_test_vs_true(y_true, y_pred, model_name="CNN+LSTM"):
     plt.figure(figsize=(10, 6))
@@ -53,6 +63,7 @@ def plot_test_vs_true(y_true, y_pred, model_name="CNN+LSTM"):
     plt.savefig(line_path)
     plt.close()
     logging.info(f"Saved test vs. true line plot: {line_path}")
+
 
 def plot_residuals(y_true, y_pred, model_name="CNN+LSTM"):
     residuals = y_true - y_pred
@@ -77,6 +88,7 @@ def plot_residuals(y_true, y_pred, model_name="CNN+LSTM"):
     plt.close()
     logging.info(f"Saved Q-Q plot: {qq_path}")
 
+
 def plot_bias_variance(bias_values, variance_values, model_names):
     x = np.arange(len(model_names))
     width = 0.35
@@ -95,22 +107,27 @@ def plot_bias_variance(bias_values, variance_values, model_names):
     plt.close()
     logging.info(f"Saved bias and variance comparison plot: {bv_path}")
 
+
 def paired_t_test(y_true, y_pred_baseline, y_pred_cnn):
+    """
+    Perform a paired t-test on the absolute errors of two models.
+    """
     errors_baseline = np.abs(y_true - y_pred_baseline)
     errors_cnn = np.abs(y_true - y_pred_cnn)
     t_stat, p_val = stats.ttest_rel(errors_baseline, errors_cnn)
     return t_stat, p_val
 
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    # Load configuration from config.yaml
+    
+    # Load configuration
     config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
     device = torch.device(config.get("device", "cpu"))
     
-    # Load dataset using ReynoldsDataLoader
-    from code.utils.data_loader import ReynoldsDataLoader
+    # Load dataset
     loader = ReynoldsDataLoader(config)
     data_dict = loader.load_dataset()
     all_images, all_drags = [], []
@@ -122,11 +139,13 @@ def main():
     drags_combined = torch.cat(all_drags, dim=0)
     full_dataset = TensorDataset(images_combined, drags_combined)
     
+    # Split dataset: using only test split here for evaluation
     total_samples = len(full_dataset)
     test_size = int(config["split"]["test_ratio"] * total_samples)
     train_size = total_samples - test_size
     _, test_dataset = random_split(full_dataset, [train_size, test_size])
     
+    # Initialize models
     sample_x, _ = full_dataset[0]
     input_dim = sample_x.numel()
     baseline_model = BaselineMLP(input_dim=input_dim, hidden_dim=config["baseline"]["hidden_dim"]).to(device)
@@ -138,6 +157,7 @@ def main():
         output_size=config["lstm"]["output_size"]
     ).to(device)
     
+    # Load saved model weights
     try:
         baseline_model.load_state_dict(torch.load(os.path.join(config["model_dir"], "baseline_mlp.pth"), map_location=device))
         cnn_model.load_state_dict(torch.load(os.path.join(config["model_dir"], "cnn_drag_predictor.pth"), map_location=device))
@@ -146,13 +166,14 @@ def main():
         logging.error(f"Error loading models: {e}")
         return
     
-    # Evaluate Baseline Model on test set
-    baseline_preds = []
-    baseline_trues = []
+    # Evaluate Baseline Model
+    baseline_preds, baseline_trues = [], []
     baseline_model.eval()
+    # Using DataLoader for consistency
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
     with torch.no_grad():
-        for x, y in test_dataset:
-            x = x.unsqueeze(0).to(device)
+        for x, y in test_loader:
+            x = x.to(device)
             pred = baseline_model(x)
             baseline_preds.append(pred.cpu().numpy())
             baseline_trues.append(y.cpu().numpy())
@@ -162,13 +183,14 @@ def main():
     bias_b, var_b = compute_bias_variance(baseline_trues, baseline_preds)
     logging.info(f"Final Test Set - Baseline MLP: MSE: {mse_b:.6f}, RMSE: {rmse_b:.6f}, R²: {r2_b:.6f}, Bias: {bias_b:.6f}, Variance: {var_b:.6f}")
     
-    # Evaluate CNN+LSTM on test set
+    # Evaluate CNN+LSTM Model
     images_list, drags_list = [], []
     for x, y in test_dataset:
         images_list.append(x.unsqueeze(0))
         drags_list.append(y)
     images_all = torch.cat(images_list, dim=0).to(device)
     drags_all = torch.cat(drags_list, dim=0).to(device).squeeze(-1)
+    
     cnn_model.eval()
     lstm_model.eval()
     with torch.no_grad():
@@ -185,7 +207,7 @@ def main():
     bias_c, var_c = compute_bias_variance(cnn_trues, cnn_preds)
     logging.info(f"Final Test Set - CNN+LSTM: MSE: {mse_c:.6f}, RMSE: {rmse_c:.6f}, R²: {r2_c:.6f}, Bias: {bias_c:.6f}, Variance: {var_c:.6f}")
     
-    # Plot visualizations
+    # Generate Evaluation Plots
     plot_true_vs_pred(cnn_trues, cnn_preds, model_name="CNN+LSTM")
     plot_test_vs_true(cnn_trues, cnn_preds, model_name="CNN+LSTM")
     plot_residuals(cnn_trues, cnn_preds, model_name="CNN+LSTM")
@@ -195,8 +217,10 @@ def main():
     variance_values = [var_b, var_c]
     plot_bias_variance(bias_values, variance_values, model_names)
     
+    # Perform paired t-test on absolute errors
     t_stat, p_val = paired_t_test(baseline_trues, baseline_preds, cnn_preds)
     logging.info(f"Paired t-test on absolute errors: t-statistic = {t_stat:.4f}, p-value = {p_val:.4e}")
+
 
 if __name__ == "__main__":
     main()
