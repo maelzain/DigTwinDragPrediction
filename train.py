@@ -40,94 +40,73 @@ def train_baseline_model(train_dataset, config, device="cpu"):
             logging.info(f"[Baseline] Epoch {epoch}/{epochs}, Loss: {epoch_loss:.6f}")
     return model
 
-def train_cnn_model(train_dataset, config, device="cpu"):
-    batch_size = config["cnn"]["batch_size"]
-    lr = config["cnn"]["learning_rate"]
-    epochs = config["cnn"]["epochs"]
-    latent_dim = config["cnn"]["latent_dim"]
+def train_cnn_lstm_joint_model(train_dataset, config, device="cpu"):
+    """
+    Train the CNN and LSTM models jointly in one forward pass.
+    
+    This integrated pipeline passes each input batch through the CNN to produce
+    latent features, then unsqueezes the latent representation into a single-time-step
+    sequence that is fed to the LSTM. Both networks are updated together.
+    """
+    # Hyperparameters for joint training:
+    joint_epochs = config["lstm"]["epochs"]  # You may adjust or add a new parameter (e.g. "joint_epochs")
+    batch_size = config["cnn"]["batch_size"]   # Using the CNN batch size; you can add a joint-specific one if desired.
+    learning_rate = config["lstm"]["learning_rate"]
+    physics_loss_weight = config["lstm"].get("physics_loss_weight", 0.0)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    model = CNNDragPredictor(latent_dim=latent_dim).to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    logging.info(f"Training CNN for {epochs} epochs on {device}")
-    model.train()
-    for epoch in range(1, epochs + 1):
+    # Initialize CNN model
+    latent_dim = config["cnn"]["latent_dim"]
+    cnn_model = CNNDragPredictor(latent_dim=latent_dim).to(device)
+    # Ensure the LSTM input size matches the CNN latent dimension
+    lstm_input_size = latent_dim
+    lstm_model = LSTMDragPredictor(
+        input_size=lstm_input_size,
+        hidden_size=config["lstm"]["hidden_size"],
+        num_layers=config["lstm"]["num_layers"],
+        output_size=config["lstm"]["output_size"]
+    ).to(device)
+
+    # Combine parameters for joint optimization
+    optimizer = optim.Adam(list(cnn_model.parameters()) + list(lstm_model.parameters()), lr=learning_rate)
+    criterion = nn.MSELoss()
+
+    logging.info(f"Training joint CNN+LSTM model for {joint_epochs} epochs on {device}")
+    cnn_model.train()
+    lstm_model.train()
+
+    for epoch in range(1, joint_epochs + 1):
         running_loss = 0.0
         for x, y in train_loader:
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
-            latent, drag_pred = model(x)
-            loss = criterion(drag_pred, y)
-            loss.backward()
+            # Forward pass through the CNN
+            latent, _ = cnn_model(x)
+            # Add a “sequence” dimension – each image is treated as a one-time-step sample.
+            latent_seq = latent.unsqueeze(1)  # Shape: (batch, 1, latent_dim)
+            # Forward pass through the LSTM
+            pred_seq, _ = lstm_model(latent_seq)  # Expected shape: (batch, 1, output_size)
+            # Remove the sequence dimension to obtain predictions with shape: (batch, output_size)
+            pred = pred_seq.squeeze(1)
+            loss = criterion(pred, y)
+            
+            # Optionally add a physics-informed loss term if sequence length is greater than 1.
+            if pred_seq.size(1) > 1:
+                diff_pred = pred_seq[:, 1:, :] - pred_seq[:, :-1, :]
+                physics_loss = torch.mean(diff_pred ** 2)
+            else:
+                physics_loss = 0.0
+
+            total_loss = loss + physics_loss_weight * physics_loss
+            total_loss.backward()
             optimizer.step()
-            running_loss += loss.item() * x.size(0)
+            running_loss += total_loss.item() * x.size(0)
         epoch_loss = running_loss / len(train_dataset)
-        if epoch % 10 == 0 or epoch == epochs:
-            logging.info(f"[CNN] Epoch {epoch}/{epochs}, Drag Loss: {epoch_loss:.6f}")
-    return model
-
-def train_lstm_model(cnn_model, train_dataset, config, device="cpu"):
-    lstm_epochs = config["lstm"]["epochs"]
-    lstm_lr = config["lstm"]["learning_rate"]
-    physics_loss_weight = config["lstm"]["physics_loss_weight"]
-    input_size = config["lstm"]["input_size"]
-    hidden_size = config["lstm"]["hidden_size"]
-    num_layers = config["lstm"]["num_layers"]
-    output_size = config["lstm"]["output_size"]
-
-    cnn_model.eval()
-    latents = []
-    with torch.no_grad():
-        for i in range(len(train_dataset)):
-            x, _ = train_dataset[i]
-            latent, _ = cnn_model(x.unsqueeze(0).to(device))
-            latents.append(latent.cpu())
-    latents = torch.cat(latents, dim=0)
-    labels = torch.cat([y for _, y in train_dataset], dim=0)
-    dataset = TensorDataset(latents, labels)
-    batch_size = config["lstm"]["batch_size"]
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    # Reshape latent features for LSTM: (seq_len, batch, input_size)
-    latents_all = latents.unsqueeze(1)
-    lstm_model = LSTMDragPredictor(
-        input_size=input_size,
-        hidden_size=hidden_size,
-        num_layers=num_layers,
-        output_size=output_size
-    ).to(device)
-    criterion = nn.MSELoss()
-    optimizer = optim.Adam(lstm_model.parameters(), lr=lstm_lr)
-
-    logging.info(f"Training LSTM for {lstm_epochs} epochs on {device}")
-    lstm_model.train()
-    for epoch in range(1, lstm_epochs + 1):
-        optimizer.zero_grad()
-        pred_seq, _ = lstm_model(latents_all)
-        pred_seq = pred_seq.squeeze()
-        if pred_seq.dim() == 0:
-            pred_seq = pred_seq.unsqueeze(0)
-        target = labels.squeeze()
-        if target.dim() == 0:
-            target = target.unsqueeze(0)
-        mse_loss = criterion(pred_seq, target)
-        if pred_seq.size(0) > 1:
-            diff_pred = pred_seq[1:] - pred_seq[:-1]
-            physics_loss = torch.mean(diff_pred ** 2)
-        else:
-            physics_loss = 0.0
-        total_loss = mse_loss + physics_loss_weight * physics_loss
-        total_loss.backward()
-        optimizer.step()
-        if epoch % 5 == 0 or epoch == lstm_epochs:
-            logging.info(
-                f"[LSTM] Epoch {epoch}/{lstm_epochs} - MSE: {mse_loss.item():.6f}, "
-                f"Physics: {physics_loss if isinstance(physics_loss, float) else physics_loss.item():.6f}, "
-                f"Total: {total_loss.item():.6f}"
-            )
-    return lstm_model
+        if epoch % 5 == 0 or epoch == joint_epochs:
+            logging.info(f"[Joint CNN+LSTM] Epoch {epoch}/{joint_epochs}, Loss: {epoch_loss:.6f}")
+    return cnn_model, lstm_model
 
 if __name__ == "__main__":
-    # Typically invoked via main.py
+    # This script is typically imported by main.py, so this block is not used.
     pass

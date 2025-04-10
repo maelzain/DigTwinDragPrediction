@@ -4,92 +4,165 @@ import yaml
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from torch.utils.data import random_split, TensorDataset, DataLoader
 from scipy import stats
+from itertools import product
 
+# Custom modules
 from code.utils.data_loader import ReynoldsDataLoader
 from code.models.baseline_model import BaselineMLP
 from code.models.cnn_model import CNNDragPredictor
 from code.models.lstm_model import LSTMDragPredictor
 
 
+# ===============================
+# Additional Metric Computations
+# ===============================
+
 def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray):
     """
-    Compute regression metrics: MSE, RMSE, and R².
+    Compute standard regression metrics: MSE, RMSE, R²,
+    plus additional metrics like MAE and Pearson correlation.
+    Returns a dictionary with all metrics.
     """
-    mse = np.mean((y_true - y_pred) ** 2)
+    # Basic errors
+    errors = y_true - y_pred
+    mse = np.mean(errors**2)
     rmse = np.sqrt(mse)
+    mae = np.mean(np.abs(errors))
+    
+    # R²
     var = np.var(y_true)
     r2 = 1 - mse / var if var != 0 else float("nan")
-    return mse, rmse, r2
+    
+    # Pearson correlation coefficient
+    # If y_true or y_pred is constant, correlation is undefined => handle with try/except
+    try:
+        pearson_corr = stats.pearsonr(y_true, y_pred)[0]
+    except Exception:
+        pearson_corr = float("nan")
+    
+    # Additional
+    # Mean absolute percentage error (MAPE) can be large if y_true has zeros.
+    # We'll compute it carefully, ignoring zero denominators:
+    mask = (y_true != 0)
+    if np.any(mask):
+        mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100.0
+    else:
+        mape = float("nan")
+    
+    return {
+        "MSE": mse,
+        "RMSE": rmse,
+        "MAE": mae,
+        "R2": r2,
+        "PearsonCorr": pearson_corr,
+        "MAPE(%)": mape
+    }
 
 
 def compute_bias_variance(y_true: np.ndarray, y_pred: np.ndarray):
     """
-    Compute bias and variance of predictions.
+    Compute bias (mean error) and variance of the predictions.
     """
     bias = np.mean(y_pred - y_true)
     variance = np.var(y_pred)
     return bias, variance
 
 
-def plot_true_vs_pred(y_true, y_pred, model_name="CNN followed by LSTM"):
-    plt.figure(figsize=(10, 6))
+# ===============================
+# Plotting / Visualization
+# ===============================
+
+def plot_parity(y_true, y_pred, model_name="CNN + LSTM"):
+    """
+    Scatter (parity) plot of y_true vs. y_pred with a 1:1 reference line.
+    """
+    plt.figure(figsize=(8, 6))
     plt.scatter(y_true, y_pred, alpha=0.7, label=model_name)
     plt.plot([min(y_true), max(y_true)], [min(y_true), max(y_true)], 'r--', label="Ideal Fit")
     plt.xlabel("True Drag (normalized)")
     plt.ylabel("Predicted Drag (normalized)")
-    plt.title(f"{model_name} Prediction Comparison")
+    plt.title(f"{model_name} Parity Plot")
     plt.legend()
     plt.tight_layout()
     os.makedirs("evaluation_plots", exist_ok=True)
-    scatter_path = os.path.join("evaluation_plots", f"{model_name}_true_vs_pred.png")
-    plt.savefig(scatter_path)
+    fname = os.path.join("evaluation_plots", f"{model_name}_parity_plot.png")
+    plt.savefig(fname)
     plt.close()
-    logging.info(f"Saved true vs. predicted scatter plot: {scatter_path}")
+    logging.info(f"Saved parity plot: {fname}")
 
 
-def plot_test_vs_true(y_true, y_pred, model_name="CNN+LSTM"):
+def plot_test_samples(y_true, y_pred, model_name="CNN + LSTM"):
+    """
+    Line plot of true vs. predicted over the test samples (indexed by sample number).
+    """
     plt.figure(figsize=(10, 6))
-    plt.plot(y_true, label="True Drag", marker='o', linestyle='-')
-    plt.plot(y_pred, label="Predicted Drag", marker='x', linestyle='--', alpha=0.8)
+    plt.plot(y_true, 'o-', label="True Drag", alpha=0.7)
+    plt.plot(y_pred, 'x--', label="Predicted Drag", alpha=0.7)
     plt.xlabel("Test Sample Index")
     plt.ylabel("Drag (normalized)")
-    plt.title(f"{model_name} - Test Samples: True vs. Predicted Drag")
+    plt.title(f"{model_name} - Test Sample Comparison")
     plt.legend()
     plt.tight_layout()
     os.makedirs("evaluation_plots", exist_ok=True)
-    line_path = os.path.join("evaluation_plots", f"{model_name}_test_vs_true.png")
-    plt.savefig(line_path)
+    fname = os.path.join("evaluation_plots", f"{model_name}_test_samples.png")
+    plt.savefig(fname)
     plt.close()
-    logging.info(f"Saved test vs. true line plot: {line_path}")
+    logging.info(f"Saved test sample comparison plot: {fname}")
 
 
-def plot_residuals(y_true, y_pred, model_name="CNN+LSTM"):
+def plot_advanced_residual_analysis(y_true, y_pred, model_name="CNN + LSTM"):
+    """
+    Produce a single figure with multiple subplots for more advanced insight:
+    1) Residuals vs. Predicted
+    2) Residuals vs. Test Sample Index
+    3) Residual Histogram
+    4) Q-Q Plot
+    """
     residuals = y_true - y_pred
-    plt.figure(figsize=(8, 5))
-    plt.hist(residuals, bins=30, edgecolor='k', alpha=0.7)
-    plt.title(f"{model_name} Residual Histogram")
-    plt.xlabel("Residual (True - Predicted)")
-    plt.ylabel("Frequency")
-    plt.tight_layout()
-    os.makedirs("evaluation_plots", exist_ok=True)
-    hist_path = os.path.join("evaluation_plots", f"{model_name}_residual_hist.png")
-    plt.savefig(hist_path)
-    plt.close()
-    logging.info(f"Saved residual histogram: {hist_path}")
     
-    plt.figure(figsize=(8, 5))
-    stats.probplot(residuals, dist="norm", plot=plt)
-    plt.title(f"{model_name} Q-Q Plot of Residuals")
-    plt.tight_layout()
-    qq_path = os.path.join("evaluation_plots", f"{model_name}_qq_plot.png")
-    plt.savefig(qq_path)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    fig.suptitle(f"{model_name} - Advanced Residual Analysis", fontsize=14)
+    
+    # (0,0) => Residual vs. Predicted
+    axes[0,0].scatter(y_pred, residuals, alpha=0.7)
+    axes[0,0].axhline(y=0, color='r', linestyle='--')
+    axes[0,0].set_xlabel("Predicted Drag")
+    axes[0,0].set_ylabel("Residual (True - Predicted)")
+    axes[0,0].set_title("Residual vs. Predicted")
+    
+    # (0,1) => Residual vs. Test Sample Index
+    sample_index = np.arange(len(y_true))
+    axes[0,1].scatter(sample_index, residuals, alpha=0.7)
+    axes[0,1].axhline(y=0, color='r', linestyle='--')
+    axes[0,1].set_xlabel("Test Sample Index")
+    axes[0,1].set_ylabel("Residual (True - Predicted)")
+    axes[0,1].set_title("Residual vs. Sample Index")
+    
+    # (1,0) => Residual Histogram
+    axes[1,0].hist(residuals, bins=30, edgecolor='k', alpha=0.7)
+    axes[1,0].set_xlabel("Residual (True - Predicted)")
+    axes[1,0].set_ylabel("Frequency")
+    axes[1,0].set_title("Residual Histogram")
+    
+    # (1,1) => Q-Q Plot
+    stats.probplot(residuals, dist="norm", plot=axes[1,1])
+    axes[1,1].set_title("Q-Q Plot of Residuals")
+    
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    os.makedirs("evaluation_plots", exist_ok=True)
+    fname = os.path.join("evaluation_plots", f"{model_name}_advanced_residual_analysis.png")
+    plt.savefig(fname)
     plt.close()
-    logging.info(f"Saved Q-Q plot: {qq_path}")
+    logging.info(f"Saved advanced residual analysis figure: {fname}")
 
 
 def plot_bias_variance(bias_values, variance_values, model_names):
+    """
+    Bar chart comparing bias and variance among different models.
+    """
     x = np.arange(len(model_names))
     width = 0.35
     plt.figure(figsize=(8, 6))
@@ -102,21 +175,36 @@ def plot_bias_variance(bias_values, variance_values, model_names):
     plt.legend()
     plt.tight_layout()
     os.makedirs("evaluation_plots", exist_ok=True)
-    bv_path = os.path.join("evaluation_plots", "bias_variance_comparison.png")
-    plt.savefig(bv_path)
+    fname = os.path.join("evaluation_plots", "bias_variance_comparison.png")
+    plt.savefig(fname)
     plt.close()
-    logging.info(f"Saved bias and variance comparison plot: {bv_path}")
+    logging.info(f"Saved bias and variance comparison: {fname}")
 
 
-def paired_t_test(y_true, y_pred_baseline, y_pred_cnn):
+def plot_time_series_generated(y_true, y_pred, model_name="CNN + LSTM", start=10, end=3000):
     """
-    Perform a paired t-test on the absolute errors of two models.
+    Generate a time axis from 'start' to 'end' and plot the
+    true vs. predicted drag over this time axis.
     """
-    errors_baseline = np.abs(y_true - y_pred_baseline)
-    errors_cnn = np.abs(y_true - y_pred_cnn)
-    t_stat, p_val = stats.ttest_rel(errors_baseline, errors_cnn)
-    return t_stat, p_val
+    timesteps = np.linspace(start, end, num=len(y_true))
+    plt.figure(figsize=(12, 6))
+    plt.plot(timesteps, y_true, 'o-', color='blue', label="True Drag")
+    plt.plot(timesteps, y_pred, 'x--', color='red', label="Predicted Drag")
+    plt.xlabel("Time Step (Generated)")
+    plt.ylabel("Drag (normalized)")
+    plt.title(f"{model_name} - Drag vs. Generated Time")
+    plt.legend()
+    plt.tight_layout()
+    os.makedirs("evaluation_plots", exist_ok=True)
+    fname = os.path.join("evaluation_plots", f"{model_name}_drag_vs_time_generated.png")
+    plt.savefig(fname)
+    plt.close()
+    logging.info(f"Saved time series plot (generated): {fname}")
 
+
+# ===============================
+# Evaluate Pipeline
+# ===============================
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -127,7 +215,7 @@ def main():
         config = yaml.safe_load(f)
     device = torch.device(config.get("device", "cpu"))
     
-    # Load dataset
+    # Data loading
     loader = ReynoldsDataLoader(config)
     data_dict = loader.load_dataset()
     all_images, all_drags = [], []
@@ -139,13 +227,13 @@ def main():
     drags_combined = torch.cat(all_drags, dim=0)
     full_dataset = TensorDataset(images_combined, drags_combined)
     
-    # Split dataset: using only test split here for evaluation
+    # Split test dataset
     total_samples = len(full_dataset)
     test_size = int(config["split"]["test_ratio"] * total_samples)
     train_size = total_samples - test_size
     _, test_dataset = random_split(full_dataset, [train_size, test_size])
     
-    # Initialize models
+    # Initialize and load models
     sample_x, _ = full_dataset[0]
     input_dim = sample_x.numel()
     baseline_model = BaselineMLP(input_dim=input_dim, hidden_dim=config["baseline"]["hidden_dim"]).to(device)
@@ -157,20 +245,18 @@ def main():
         output_size=config["lstm"]["output_size"]
     ).to(device)
     
-    # Load saved model weights
     try:
         baseline_model.load_state_dict(torch.load(os.path.join(config["model_dir"], "baseline_mlp.pth"), map_location=device))
         cnn_model.load_state_dict(torch.load(os.path.join(config["model_dir"], "cnn_drag_predictor.pth"), map_location=device))
         lstm_model.load_state_dict(torch.load(os.path.join(config["model_dir"], "lstm_drag.pth"), map_location=device))
     except Exception as e:
-        logging.error(f"Error loading models: {e}")
+        logging.error(f"Error loading model weights: {e}")
         return
     
-    # Evaluate Baseline Model
-    baseline_preds, baseline_trues = [], []
-    baseline_model.eval()
-    # Using DataLoader for consistency
+    # Evaluate baseline model
+    baseline_trues, baseline_preds = [], []
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    baseline_model.eval()
     with torch.no_grad():
         for x, y in test_loader:
             x = x.to(device)
@@ -179,11 +265,8 @@ def main():
             baseline_trues.append(y.cpu().numpy())
     baseline_trues = np.concatenate(baseline_trues).flatten()
     baseline_preds = np.concatenate(baseline_preds).flatten()
-    mse_b, rmse_b, r2_b = compute_regression_metrics(baseline_trues, baseline_preds)
-    bias_b, var_b = compute_bias_variance(baseline_trues, baseline_preds)
-    logging.info(f"Final Test Set - Baseline MLP: MSE: {mse_b:.6f}, RMSE: {rmse_b:.6f}, R²: {r2_b:.6f}, Bias: {bias_b:.6f}, Variance: {var_b:.6f}")
     
-    # Evaluate CNN+LSTM Model
+    # Evaluate CNN + LSTM
     images_list, drags_list = [], []
     for x, y in test_dataset:
         images_list.append(x.unsqueeze(0))
@@ -194,32 +277,54 @@ def main():
     cnn_model.eval()
     lstm_model.eval()
     with torch.no_grad():
-        latents = [cnn_model(images_all[i:i+1])[0] for i in range(images_all.size(0))]
-    latents_all = torch.cat(latents, dim=0).unsqueeze(1)
-    with torch.no_grad():
+        latents = []
+        for i in range(images_all.size(0)):
+            latent, _ = cnn_model(images_all[i:i+1])
+            latents.append(latent)
+        latents_all = torch.cat(latents, dim=0).unsqueeze(1)
         pred_seq, _ = lstm_model(latents_all)
         pred_seq = pred_seq.squeeze()
         if pred_seq.dim() == 0:
             pred_seq = pred_seq.unsqueeze(0)
+
     cnn_trues = drags_all.cpu().numpy().flatten()
     cnn_preds = pred_seq.cpu().numpy().flatten()
-    mse_c, rmse_c, r2_c = compute_regression_metrics(cnn_trues, cnn_preds)
-    bias_c, var_c = compute_bias_variance(cnn_trues, cnn_preds)
-    logging.info(f"Final Test Set - CNN+LSTM: MSE: {mse_c:.6f}, RMSE: {rmse_c:.6f}, R²: {r2_c:.6f}, Bias: {bias_c:.6f}, Variance: {var_c:.6f}")
     
-    # Generate Evaluation Plots
-    plot_true_vs_pred(cnn_trues, cnn_preds, model_name="CNN+LSTM")
-    plot_test_vs_true(cnn_trues, cnn_preds, model_name="CNN+LSTM")
-    plot_residuals(cnn_trues, cnn_preds, model_name="CNN+LSTM")
+    # Compute metrics
+    baseline_metrics = compute_regression_metrics(baseline_trues, baseline_preds)
+    baseline_bias, baseline_var = compute_bias_variance(baseline_trues, baseline_preds)
+
+    cnn_metrics = compute_regression_metrics(cnn_trues, cnn_preds)
+    cnn_bias, cnn_var = compute_bias_variance(cnn_trues, cnn_preds)
     
-    model_names = ["Baseline", "CNN+LSTM"]
-    bias_values = [bias_b, bias_c]
-    variance_values = [var_b, var_c]
-    plot_bias_variance(bias_values, variance_values, model_names)
+    logging.info("=== Baseline MLP Performance ===")
+    for k,v in baseline_metrics.items():
+        logging.info(f"{k}: {v:.6f}")
+    logging.info(f"Bias: {baseline_bias:.6f}, Variance: {baseline_var:.6f}")
     
-    # Perform paired t-test on absolute errors
-    t_stat, p_val = paired_t_test(baseline_trues, baseline_preds, cnn_preds)
-    logging.info(f"Paired t-test on absolute errors: t-statistic = {t_stat:.4f}, p-value = {p_val:.4e}")
+    logging.info("=== CNN + LSTM Performance ===")
+    for k,v in cnn_metrics.items():
+        logging.info(f"{k}: {v:.6f}")
+    logging.info(f"Bias: {cnn_bias:.6f}, Variance: {cnn_var:.6f}")
+
+    # Generate advanced plots for CNN + LSTM
+    plot_parity(cnn_trues, cnn_preds, model_name="CNN + LSTM")
+    plot_test_samples(cnn_trues, cnn_preds, model_name="CNN + LSTM")
+    plot_advanced_residual_analysis(cnn_trues, cnn_preds, model_name="CNN + LSTM")
+    
+    # Compare bias-variance across models
+    model_names = ["Baseline", "CNN + LSTM"]
+    biases = [baseline_bias, cnn_bias]
+    variances = [baseline_var, cnn_var]
+    plot_bias_variance(biases, variances, model_names)
+    
+    # Optional: Time-series plot with generated time steps
+    plot_time_series_generated(cnn_trues, cnn_preds, model_name="CNN + LSTM", start=10, end=3000)
+    
+    # Paired t-test on absolute errors
+    t_stat, p_val = stats.ttest_rel(np.abs(baseline_trues - baseline_preds),
+                                    np.abs(cnn_trues - cnn_preds))
+    logging.info(f"Paired t-test (Baseline vs. CNN+LSTM) => t-stat: {t_stat:.4f}, p-value: {p_val:.4e}")
 
 
 if __name__ == "__main__":
