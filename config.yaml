@@ -36,10 +36,10 @@ baseline:
 
 # CNN Configuration
 cnn:
-  latent_dim: 256
-  learning_rate: 0.0005
-  epochs: 30
-  batch_size: 20
+  latent_dim: 128
+  learning_rate: 0.0001
+  epochs: 50
+  batch_size: 10
 
 # LSTM Configuration (with Physics-Informed Loss)
 lstm:
@@ -50,7 +50,7 @@ lstm:
   epochs: 50
   learning_rate: 0.0005
   physics_loss_weight: 0.005
-  batch_size: 64
+  batch_size: 32
 
 # Data Splitting Configuration
 split:
