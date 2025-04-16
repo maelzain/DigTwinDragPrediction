@@ -6,7 +6,7 @@ __pycache__/
 # Logs and output files
 *.log
 logs/
-evaluation_plots/
+#evaluation_plots/
 
 # Data files (if they are large or meant to be kept locally)
 data/

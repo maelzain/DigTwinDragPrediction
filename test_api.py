@@ -2,204 +2,179 @@
 """
 Instant Design Insight API Testing Tool
 
-This is a professional, investor-friendly command-line interface for testing our API.
-It demonstrates how our solution quickly delivers design performance insights—
-highlighting time and cost benefits—without exposing any technical details.
+This professional command-line tool demonstrates how to test the
+Design Insight API. It lets the user select a design category,
+snapshot image, and model type, then sends an API request and
+displays the returned performance insights.
 """
 
 import os
+import sys
 import base64
 import yaml
 import requests
-import sys
 import time
-from typing import Dict, List, Any
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.progress import Progress
 
-# --- Rich Console Setup ---
+# Initialize rich console for styled outputs.
 console = Console()
 
-# --- Helper Functions ---
 
-def load_config(config_path: str = "config.yaml") -> dict:
-    """Load the investor-focused configuration from a YAML file."""
+def load_config(config_path="config.yaml"):
+    """Load configuration settings from a YAML file."""
     try:
-        with open(config_path, "r") as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        console.print(f"[bold red]Error:[/] The configuration file '{config_path}' was not found.")
-        console.print("Please ensure the file exists and try again.")
-        sys.exit(1)
-    except yaml.YAMLError:
-        console.print(f"[bold red]Error:[/] The configuration file '{config_path}' is not formatted correctly.")
+        with open(config_path, "r") as file:
+            return yaml.safe_load(file)
+    except Exception as e:
+        console.print(f"[bold red]Error loading configuration: {e}[/]")
         sys.exit(1)
 
-def list_images(folder_path: str) -> List[str]:
-    """Return a sorted list of image filenames from the specified folder."""
-    valid_exts = (".png", ".jpg", ".jpeg")
+
+def list_images(folder_path):
+    """Return a sorted list of image file names in the specified folder."""
+    valid_extensions = (".png", ".jpg", ".jpeg")
     try:
-        images = sorted([f for f in os.listdir(folder_path) if f.lower().endswith(valid_exts)])
-        return images
-    except FileNotFoundError:
-        console.print(f"[bold red]Error:[/] The folder '{folder_path}' was not found.")
+        images = [f for f in os.listdir(folder_path) if f.lower().endswith(valid_extensions)]
+        if not images:
+            console.print(f"[bold red]No images found in {folder_path}[/]")
+        return sorted(images)
+    except Exception as e:
+        console.print(f"[bold red]Error listing images: {e}[/]")
         return []
 
-def encode_image_to_base64(image_path: str) -> str:
-    """Encode an image file to a base64 string for transmitting to our API."""
+
+def encode_image_to_base64(image_path):
+    """Encode the image file as a base64 string for transmission."""
     try:
         with open(image_path, "rb") as img_file:
-            b64_string = base64.b64encode(img_file.read()).decode("utf-8")
-        return b64_string
-    except FileNotFoundError:
-        console.print(f"[bold red]Error:[/] The image file '{image_path}' was not found.")
-        sys.exit(1)
+            return base64.b64encode(img_file.read()).decode("utf-8")
     except Exception as e:
-        console.print(f"[bold red]Error:[/] Could not encode the image: {str(e)}")
+        console.print(f"[bold red]Error encoding image: {e}[/]")
         sys.exit(1)
 
-def display_menu(options: List[str], title: str) -> None:
-    """Display a formatted menu of options."""
-    table = Table(show_header=False, box=None)
+
+def display_menu(options, title):
+    """Display a numbered menu for user selection."""
+    table = Table(show_header=True, header_style="bold blue")
     table.add_column("Number", style="cyan")
     table.add_column("Option")
-    for idx, opt in enumerate(options, 1):
-        table.add_row(f"{idx}", opt)
-    console.print(Panel(table, title=f"[bold blue]{title}[/]", expand=False))
+    for idx, option in enumerate(options, start=1):
+        table.add_row(str(idx), option)
+    console.print(Panel(table, title=title))
 
-def get_user_choice(options: List[str], prompt: str) -> str:
-    """Prompt the user to select an option from a list."""
+
+def get_user_choice(options, prompt):
+    """Prompt the user to select one of the available options."""
     display_menu(options, prompt)
     while True:
         try:
-            console.print(f"[yellow]Enter selection (1-{len(options)})[/]: ", end="")
-            selection = input()
-            idx = int(selection) - 1
-            if 0 <= idx < len(options):
-                return options[idx]
-            console.print("[red]Invalid selection. Please try again.[/]")
+            choice = int(input(f"Enter selection (1-{len(options)}): "))
+            if 1 <= choice <= len(options):
+                return options[choice - 1]
+            else:
+                console.print("[red]Invalid choice. Try again.[/]")
         except ValueError:
             console.print("[red]Please enter a valid number.[/]")
 
-def display_summary(payload: Dict[str, Any]) -> None:
-    """Display a formatted summary of the API request details in plain language."""
-    table = Table(show_header=True, header_style="bold magenta")
+
+def display_request_summary(payload):
+    """Display a summary of the API request parameters."""
+    table = Table(show_header=True, header_style="bold green")
     table.add_column("Parameter")
     table.add_column("Value")
     for key, value in payload.items():
-        if key != "image":
-            table.add_row(key, str(value))
+        if key == "image":
+            table.add_row(key, "[Base64 Encoded Data]")
         else:
-            table.add_row(key, "[Base64 Encoded Image]")
-    console.print(Panel(table, title="[bold green]Request Summary[/]", expand=False))
+            table.add_row(key, str(value))
+    console.print(Panel(table, title="Request Summary"))
 
-def handle_api_response(response: requests.Response) -> None:
-    """Display the API response in plain language, highlighting business benefits."""
-    console.print(f"\n[bold]Status Code:[/] {response.status_code}")
-    if response.status_code == 200:
-        try:
-            data = response.json()
-            result_table = Table(show_header=True, header_style="bold green")
-            result_table.add_column("Field")
-            result_table.add_column("Value")
-            for key, value in data.items():
-                result_table.add_row(key, str(value))
-            console.print(Panel(result_table, title="[bold green]Performance Insight[/]", expand=False))
-        except Exception:
-            console.print("[yellow]Raw Response:[/]")
-            console.print(response.text)
-    else:
-        console.print(f"[bold red]Error Response:[/] {response.text}")
 
-def main() -> None:
-    """Run the investor-friendly API testing workflow."""
-    console.print(Panel.fit(
-        "[bold blue]Instant Design Insight API Testing Tool[/]",
-        subtitle="[italic]Unlock rapid design performance insights[/]"
-    ))
-    
-    with console.status("[bold blue]Loading configuration...[/]"):
-        config = load_config()
-        data_dir = config["data_dir"]
-        reynolds_list = config["reynolds"]
-        drag_ranges = config.get("drag_ranges", {
-            "re37": [3.26926e-07, 3.33207e-07],
-            "re75": [1.01e-06, 1.04e-06],
-            "re150": [3.15e-06, 0.000130279],
-            "re300": [1.4e-05, 1.6e-05]
-        })
-    
-    # Build list of internal folder names (e.g., "re37", "re75", etc.)
-    internal_folders = [f"re{r}" for r in reynolds_list]
+def main():
+    console.print(Panel("[bold blue]Instant Design Insight API Testing Tool[/bold blue]", subtitle="Unlock rapid design performance insights"))
+    config = load_config()
+
+    data_dir = config.get("data_dir")
+    reynolds_list = config.get("reynolds", [37, 75, 150, 300])
+    # Mapping from technical folder names to investor-friendly categories.
     investor_mapping = {
         "re37": "Category A",
         "re75": "Category B",
         "re150": "Category C",
         "re300": "Category D"
     }
-    investor_labels = [investor_mapping[folder] for folder in internal_folders if folder in investor_mapping]
-    chosen_label = get_user_choice(investor_labels, "Select Design Category")
-    chosen_folder = [key for key, val in investor_mapping.items() if val == chosen_label][0]
-    
+    internal_folders = [f"re{r}" for r in reynolds_list]
+    investor_categories = [investor_mapping.get(folder, folder) for folder in internal_folders if folder in investor_mapping]
+
+    # User selects design category.
+    chosen_category = get_user_choice(investor_categories, "Select Design Category")
+    chosen_folder = [key for key, val in investor_mapping.items() if val == chosen_category][0]
+
     folder_path = os.path.join(data_dir, chosen_folder)
-    console.print(f"[blue]Selected folder:[/] {folder_path}")
-    
-    with console.status("[bold blue]Scanning for snapshots...[/]"):
-        available_images = list_images(folder_path)
-    if not available_images:
-        console.print(f"[bold red]Error:[/] No snapshots found in {folder_path}")
+    console.print(f"[bold blue]Selected folder:[/] {folder_path}")
+
+    images = list_images(folder_path)
+    if not images:
         sys.exit(1)
-    chosen_image = get_user_choice(available_images, "Select Snapshot")
-    
+    chosen_image = get_user_choice(images, "Select Snapshot")
+
     model_options = ["Advanced Model", "Standard Model"]
     chosen_model = get_user_choice(model_options, "Select Model Type")
-    
-    performance_group = chosen_folder
-    
-    with console.status("[bold blue]Preparing snapshot...[/]"):
-        image_path = os.path.join(folder_path, chosen_image)
-        image_b64 = encode_image_to_base64(image_path)
-    
+
+    # Prepare image for API request.
+    image_path = os.path.join(folder_path, chosen_image)
+    image_base64 = encode_image_to_base64(image_path)
+
     payload = {
-        "image": image_b64,
+        "image": image_base64,
         "filename": chosen_image,
         "model_type": chosen_model,
-        "reynolds_group": performance_group
+        "reynolds_group": chosen_folder
     }
-    display_summary(payload)
-    
-    print("\nReady to send the insight request? Continue? [y/N]: ", end="")
-    confirm = input().lower()
+    display_request_summary(payload)
+
+    confirm = input("Proceed with sending the request? (y/N): ").strip().lower()
     if confirm not in ["y", "yes"]:
         console.print("[yellow]Operation cancelled by user.[/]")
-        return
+        sys.exit(0)
 
     api_url = "http://localhost:5000/predict_performance"
-    with Progress() as progress:
-        task = progress.add_task("[green]Sending request...", total=100)
-        for i in range(50):
-            time.sleep(0.01)
-            progress.update(task, advance=1)
+
+    try:
+        console.print("[bold blue]Sending API request...[/]")
+        start_time = time.time()
+        response = requests.post(api_url, json=payload, timeout=30)
+        elapsed = time.time() - start_time
+    except requests.RequestException as e:
+        console.print(f"[bold red]Error sending request: {e}[/]")
+        sys.exit(1)
+
+    if response.status_code == 200:
         try:
-            response = requests.post(api_url, json=payload, timeout=30)
-        except requests.exceptions.RequestException as e:
-            console.print(f"[bold red]Request Error:[/] {str(e)}")
-            sys.exit(1)
-        for i in range(50):
-            time.sleep(0.01)
-            progress.update(task, advance=1)
-    
-    handle_api_response(response)
-    console.print("\n[bold green]Test completed successfully. Your rapid design insights are ready![/]")
+            data = response.json()
+            table = Table(show_header=True, header_style="bold green")
+            table.add_column("Field")
+            table.add_column("Value")
+            for key, value in data.items():
+                table.add_row(key, str(value))
+            console.print(Panel(table, title="API Response"))
+        except Exception as e:
+            console.print(f"[bold yellow]Response parsing error: {e}.[/] Raw response:\n{response.text}")
+    else:
+        console.print(f"[bold red]Error: Received status code {response.status_code}[/]")
+        console.print(response.text)
+
+    console.print(f"[bold blue]Request completed in {elapsed:.3f} seconds.[/]")
+
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        console.print("\n[yellow]Operation cancelled by user.[/]")
+        console.print("\n[bold yellow]Operation cancelled by user.[/]")
         sys.exit(0)
-    except Exception as e:
-        console.print(f"[bold red]Unexpected error:[/] {str(e)}")
+    except Exception as ex:
+        console.print(f"[bold red]Unexpected error: {ex}[/]")
         sys.exit(1)
