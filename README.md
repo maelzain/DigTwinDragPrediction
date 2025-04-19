@@ -1,5 +1,7 @@
 # Digital Twin for 2D Unsteady Flow Drag Prediction
 
+Google drive link containing data :https://drive.google.com/drive/folders/1aHDKlNZimPbHoVmeUZ5s75CI9-KJATCK?usp=drive_link
+
 ## Overview
 This project introduces an advanced machine learning framework that integrates traditional Computational Fluid Dynamics (CFD) with deep learning to predict instantaneous drag forces on a sphere in 2D unsteady flow fields. By combining state-of-the-art CNN-LSTM architecture with a containerized deployment strategy, this solution dramatically reduces simulation time from hours to seconds, enabling real-time analysis and design optimization.
 
