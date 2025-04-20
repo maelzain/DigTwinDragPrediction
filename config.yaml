@@ -54,9 +54,9 @@ lstm:
 
 # Data Splitting Configuration
 split:
-  train_ratio: 0.7     # Modified: reduced from 0.8 to accommodate validation set
-  test_ratio: 0.2      # Test set ratio remains the same
-  eval_ratio: 0.1      # Modified: increased from 0 to create validation set for final model evaluation
+  train_ratio: 0.7     
+  test_ratio: 0.2      
+  eval_ratio: 0.1      
 
 # Hyperparameter Tuning Configuration
 hyperparameter_tuning:
