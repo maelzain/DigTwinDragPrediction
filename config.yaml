@@ -10,7 +10,7 @@ api_port: 5000
 
 # Image processing settings
 resize: [64, 64]
-augment: true
+augment: false                #put true if your data is not suffcient or you are not sure about the data quality
 image_mean: 0.45             # Dataset-wide mean for image normalization
 image_std: 0.22              # Dataset-wide standard deviation for image normalization
 
