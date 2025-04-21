@@ -5,7 +5,7 @@ data_dir: "C:\\Users\\user\\Desktop\\COURSES\\AUB\\Spring 2024-2025-739988\\intr
 model_dir: "models"
 
 # Device configuration
-device: "cpu"         # Use "cuda" if available
+device: "cpu"         # Use "cuda" if available to run on GPU
 api_port: 5000
 
 # Image processing settings
