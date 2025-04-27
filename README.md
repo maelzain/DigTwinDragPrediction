@@ -190,5 +190,4 @@ Special thanks to Dr. Ammar Mohanna for valuable guidance and support throughout
 
 - **GitHub**:https://github.com/AmmarMohanna
 ## License
-
-This project is licensed under AUB terms.
+MIT license
