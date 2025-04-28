@@ -1,5 +1,6 @@
 # Digital Twin for 2D Unsteady Flow Drag Prediction
 
+Note: The dataset for this project was generated using a specific solver (custom finite-volume solver), giving us precise control over every image’s characteristics and embedded flow features, rather than relying on off-the-shelf datasets that may contain inconsistencies
 Google drive link containing data :https://drive.google.com/drive/folders/1aHDKlNZimPbHoVmeUZ5s75CI9-KJATCK?usp=drive_link
 
 ## Overview
